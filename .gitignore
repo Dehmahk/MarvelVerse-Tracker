@@ -1,0 +1,39 @@
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- PyInstaller build output -------------------------------------------------
+build/
+dist/
+*.spec.bak
+
+# --- User/runtime data --------------------------------------------------------
+# data/marvelverse.db itself IS tracked -- it's the shipped Marvel catalog
+# (universes, projects, achievements, ...), not personal data, so a fresh
+# clone has the full experience immediately rather than an empty database
+# that needs a TMDB sync first. Only the genuinely personal/transient bits
+# are ignored: your settings (which can contain a TMDB API key), SQLite's
+# WAL sidecar files, your own local backups, the poster cache, and logs.
+/data/config.json
+/data/*.db-shm
+/data/*.db-wal
+/data/backups/
+/cache/
+/logs/
+
+# --- Editors / OS -------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
