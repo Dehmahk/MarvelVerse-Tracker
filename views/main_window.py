@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from PySide6.QtCore import QByteArray, QEasingCurve, QPropertyAnimation, QSize, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QGraphicsOpacityEffect,
@@ -12,18 +13,22 @@ from PySide6.QtWidgets import (
     QSplitter,
     QStackedWidget,
     QStatusBar,
+    QSystemTrayIcon,
     QWidget,
 )
 
 from settings.config import AppConfig
 from settings.defaults import DEFAULT_POSTER_CARD_SIZE
+from resource_paths import resource_root
 from views import image_loader
 from views.font_scaling import apply_font_scale
 from views.formatting import configure as configure_formatting
 from views.pages.achievements_view import AchievementsView
+from views.pages.calendar_view import CalendarView
 from views.pages.collections_view import CollectionsView
 from views.pages.dashboard_view import DashboardView
 from views.pages.library_view import LibraryView
+from views.pages.person_detail_view import PersonDetailView
 from views.pages.project_detail_view import ProjectDetailView
 from views.pages.settings_view import SettingsView
 from views.pages.timeline_view import TimelineView
@@ -48,9 +53,10 @@ _LANDING_PAGE_ROWS = {
     "dashboard": 0,
     "library": 1,
     "timeline": 2,
-    "collections": 3,
-    "achievements": 4,
-    "settings": 5,
+    "calendar": 3,
+    "collections": 4,
+    "achievements": 5,
+    "settings": 6,
 }
 
 
@@ -69,18 +75,24 @@ class MainWindow(QMainWindow):
     # page and selecting this collection there.
     collection_activated = Signal(int)
     user_data_field_changed = Signal(int, str, object)
-    log_watch_requested = Signal(int)
+    log_watch_requested = Signal(int, str)
+    find_on_tmdb_requested = Signal(int)
+    person_activated = Signal(int)
+    episode_toggled = Signal(int, bool)
+    season_toggled = Signal(int, int, bool)
     timeline_universe_changed = Signal(object)  # int | None
     timeline_sort_mode_changed = Signal(str)  # "phase" | "chronological"
     tmdb_api_key_changed = Signal(str)
     tmdb_sync_requested = Signal()
     backup_requested = Signal()
     check_for_updates_requested = Signal()
+    run_data_integrity_check_requested = Signal()
     install_update_requested = Signal()
     restore_requested = Signal(str)
     delete_backup_requested = Signal(str)
     export_requested = Signal(str)
     import_requested = Signal(str)
+    compare_with_friend_requested = Signal(str)
     # Emitted with a page key ("dashboard", "library", "timeline",
     # "collections", "achievements", "settings", "project_detail")
     # whenever the visible page changes -- lets the controller defer a
@@ -102,6 +114,7 @@ class MainWindow(QMainWindow):
         self.config = config
         self._animations_enabled = config.animations_enabled
         self._page_transition_animation = None
+        self._tray_icon = None  # lazily created on first show_native_notification() call
 
         # Poster/backdrop art is downloaded once and cached to disk under
         # the configured cache directory; every PosterLabel across the app
@@ -162,6 +175,8 @@ class MainWindow(QMainWindow):
         self._add_page(self.library_view, "library")
         self.timeline_view = TimelineView()
         self._add_page(self.timeline_view, "timeline")
+        self.calendar_view = CalendarView()
+        self._add_page(self.calendar_view, "calendar")
         self.collections_view = CollectionsView()
         self._add_page(self.collections_view, "collections")
         self.achievements_view = AchievementsView()
@@ -175,28 +190,43 @@ class MainWindow(QMainWindow):
         self.project_detail_view = ProjectDetailView(enable_trailer_embed=self.config.enable_trailer_embed)
         self._detail_page_index = self._add_page(self.project_detail_view, "project_detail")
 
+        # Actor/Director Details -- only reached from Project Details'
+        # cast/crew list, same "no sidebar row, appended after the
+        # sidebar-navigable pages" reasoning as Project Details itself.
+        self.person_detail_view = PersonDetailView()
+        self._person_detail_page_index = self._add_page(self.person_detail_view, "person_detail")
+
         self.library_view.project_activated.connect(self.project_activated.emit)
         self.dashboard_view.project_activated.connect(self.project_activated.emit)
         self.dashboard_view.collection_activated.connect(self.collection_activated.emit)
         self.timeline_view.project_activated.connect(self.project_activated.emit)
         self.collections_view.project_activated.connect(self.project_activated.emit)
+        self.calendar_view.project_activated.connect(self.project_activated.emit)
         self.timeline_view.universe_changed.connect(self.timeline_universe_changed.emit)
         self.timeline_view.sort_mode_changed.connect(self.timeline_sort_mode_changed.emit)
         self.project_detail_view.back_requested.connect(self._on_back_requested)
         self.project_detail_view.navigate_to_project_requested.connect(self.project_activated.emit)
+        self.project_detail_view.find_on_tmdb_requested.connect(self.find_on_tmdb_requested.emit)
         self.project_detail_view.user_data_field_changed.connect(
             self.user_data_field_changed.emit
         )
         self.project_detail_view.log_watch_requested.connect(self.log_watch_requested.emit)
+        self.project_detail_view.person_activated.connect(self.person_activated.emit)
+        self.project_detail_view.episode_toggled.connect(self.episode_toggled.emit)
+        self.project_detail_view.season_toggled.connect(self.season_toggled.emit)
+        self.person_detail_view.back_requested.connect(self._on_person_detail_back_requested)
+        self.person_detail_view.project_activated.connect(self.project_activated.emit)
         self.settings_view.tmdb_api_key_changed.connect(self.tmdb_api_key_changed.emit)
         self.settings_view.tmdb_sync_requested.connect(self.tmdb_sync_requested.emit)
         self.settings_view.backup_requested.connect(self.backup_requested.emit)
         self.settings_view.check_for_updates_requested.connect(self.check_for_updates_requested.emit)
+        self.settings_view.run_data_integrity_check_requested.connect(self.run_data_integrity_check_requested.emit)
         self.settings_view.install_update_requested.connect(self.install_update_requested.emit)
         self.settings_view.restore_requested.connect(self.restore_requested.emit)
         self.settings_view.delete_backup_requested.connect(self.delete_backup_requested.emit)
         self.settings_view.export_requested.connect(self.export_requested.emit)
         self.settings_view.import_requested.connect(self.import_requested.emit)
+        self.settings_view.compare_with_friend_requested.connect(self.compare_with_friend_requested.emit)
         self.settings_view.appearance_changed.connect(self._on_appearance_changed)
         self.settings_view.preferences_changed.connect(self._on_preferences_changed)
 
@@ -312,6 +342,16 @@ class MainWindow(QMainWindow):
         # path _on_navigate uses instead.
         self._on_navigate(self._detail_return_index)
 
+    def _on_person_detail_back_requested(self) -> None:
+        # Person Details is only ever reached from Project Details' own
+        # cast/crew list -- there's no other path to it in this app --
+        # so Back always returns there directly, never all the way back
+        # to Library/Dashboard/Timeline. Deliberately NOT routed through
+        # _on_navigate (that's for sidebar-navigable pages only, and
+        # Project Details isn't one); this mirrors show_project_detail's
+        # own setCurrentIndex(...) call instead.
+        self.pages.setCurrentIndex(self._detail_page_index)
+
     def _toggle_sidebar(self) -> None:
         self.sidebar.set_collapsed(not self.sidebar.is_collapsed())
 
@@ -420,6 +460,30 @@ class MainWindow(QMainWindow):
     def show_status_message(self, message: str, timeout_ms: int = 4000) -> None:
         self.statusBar().showMessage(message, timeout_ms)
 
+    def show_native_notification(self, title: str, message: str) -> None:
+        """A real OS-level desktop notification (via the system tray),
+        distinct from show_status_message()'s in-app status bar text --
+        this shows up outside the app window entirely, the same way any
+        other desktop notification would, so it's visible even if the
+        app isn't currently focused or is minimized.
+
+        Silently does nothing if the current desktop environment has no
+        system tray at all (some minimal Linux setups) -- there's no
+        good fallback for "native notification" that isn't itself a
+        native notification, so this degrades to simply not showing one
+        rather than trying to fake it some other way."""
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+
+        if self._tray_icon is None:
+            icon_path = resource_root() / "packaging" / "assets" / "icon.png"
+            icon = QIcon(str(icon_path)) if icon_path.exists() else self.windowIcon()
+            self._tray_icon = QSystemTrayIcon(icon, self)
+            self._tray_icon.setToolTip(self.windowTitle() or "MarvelVerse Tracker")
+            self._tray_icon.show()
+
+        self._tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 8000)
+
     def update_library_summary(self, summary) -> None:
         """Update the status bar chips from a services.statistics_service.LibrarySummary.
         Takes a plain object (duck-typed) so this module never has to import
@@ -472,12 +536,28 @@ class MainWindow(QMainWindow):
         self.page_changed.emit("project_detail")
         self._animate_current_page()
 
+    def show_person_detail(self, detail) -> None:
+        """Populate the Actor/Director Details page from a duck-typed
+        ``services.person_service.PersonDetail`` and switch to it.
+        Person Details is only ever reached from Project Details' own
+        cast/crew list, so its Back button always returns there directly
+        (see _on_person_detail_back_requested) -- this doesn't need to
+        touch _detail_return_index at all, unlike show_project_detail."""
+        self.person_detail_view.set_person(detail)
+        self.pages.setCurrentIndex(self._person_detail_page_index)
+        self.toolbar.set_page_title(detail.name)
+        self.page_changed.emit("person_detail")
+        self._animate_current_page()
+
     def refresh_project_detail(self, detail) -> None:
         """Push updated data into the Project Details page without
         changing navigation -- used after a user-data edit is saved."""
         self.project_detail_view.set_project(detail)
         if self.pages.currentIndex() == self._detail_page_index:
             self.toolbar.set_page_title(detail.title)
+
+    def set_project_episodes(self, episodes) -> None:
+        self.project_detail_view.set_episodes(episodes)
 
     def set_tmdb_sync_status(self, message: str) -> None:
         """Push a TMDB sync summary/error message into the Settings page.

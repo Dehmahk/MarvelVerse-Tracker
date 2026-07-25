@@ -24,6 +24,11 @@ class WatchHistoryEntry(Base):
     )
     is_rewatch: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Free text -- "Sarah", "the whole family", "movie night group", etc.
+    # Deliberately not a structured/normalized list of "people" records;
+    # this is just a personal note about a specific watch event, not
+    # meant to cross-reference against cast/crew Person rows.
+    watched_with: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     project: Mapped["Project"] = relationship(back_populates="watch_history")
 

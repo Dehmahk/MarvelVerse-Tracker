@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base, TimestampMixin
@@ -23,6 +23,16 @@ class AchievementCriteriaType(str, enum.Enum):
     # with its "total" being every other Achievement row instead of a
     # universe/franchise/collection's member projects.
     ALL_ACHIEVEMENTS_COMPLETE = "all_achievements_complete"
+    # Bespoke, one-off unlock conditions that don't fit any of the
+    # generic count/percent-based types above -- each one is
+    # hand-written Python, dispatched by the achievement's own `key`
+    # (see services.achievement_service._evaluate_hidden_special).
+    # Every achievement using this criteria type should also have
+    # is_hidden=True: its real name/description/icon stay hidden as
+    # "???" until unlocked, which is the whole point of a hidden
+    # achievement -- the *criteria* being unusual is only half of it,
+    # not spoiling what it is in advance is the other half.
+    HIDDEN_SPECIAL = "hidden_special"
 
 
 class AchievementTier(str, enum.Enum):
@@ -60,6 +70,12 @@ class Achievement(TimestampMixin, Base):
     criteria_reference: Mapped[str | None] = mapped_column(
         String(128), nullable=True, doc="Optional slug this criteria refers to, e.g. a universe slug."
     )
+    # True for a "hidden"/"secret" achievement: name/description/icon
+    # are replaced with a "???" placeholder in the UI until unlocked --
+    # see views/pages/achievements_view.py. The criteria being unusual
+    # is only half of what makes an achievement "hidden"; not spoiling
+    # what it is in advance is the other half.
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     unlocks: Mapped[list["UserAchievement"]] = relationship(
         back_populates="achievement", cascade="all, delete-orphan"

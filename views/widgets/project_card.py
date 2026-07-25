@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QLabel, QStackedLayout, QVBoxLayout, QWidget
 
 from views.formatting import format_rating
@@ -53,6 +53,13 @@ class ProjectCard(QFrame):
         super().__init__(parent)
         self.setObjectName("projectCard")
         self._project_id = item.id
+        self._hover_poster_path = getattr(item, "poster_path", None)
+        self._hover_title = item.title
+        self._hover_preview = None
+        self._hover_timer = QTimer(self)
+        self._hover_timer.setSingleShot(True)
+        self._hover_timer.setInterval(500)
+        self._hover_timer.timeout.connect(self._show_hover_preview)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setProperty("posterOnly", poster_only)
 
@@ -169,3 +176,26 @@ class ProjectCard(QFrame):
         super().mousePressEvent(event)
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self._project_id)
+
+    def enterEvent(self, event) -> None:  # noqa: N802 - Qt override
+        self._hover_timer.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802 - Qt override
+        self._hover_timer.stop()
+        if self._hover_preview is not None:
+            self._hover_preview.hide()
+        super().leaveEvent(event)
+
+    def _show_hover_preview(self) -> None:
+        # Lazily created per-card, only if this specific card actually
+        # gets hovered long enough -- most cards in a full Library page
+        # never will, so this avoids creating a whole extra top-level
+        # window for every single tile up front.
+        if self._hover_preview is None:
+            from views.widgets.poster_hover_preview import PosterHoverPreview
+
+            self._hover_preview = PosterHoverPreview()
+
+        anchor = self.mapToGlobal(QPoint(self.width() + 8, 0))
+        self._hover_preview.show_for(self._hover_poster_path, self._hover_title, anchor)

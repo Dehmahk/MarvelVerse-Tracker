@@ -16,6 +16,9 @@ _ACCENT_HOVER_TOKEN = "@ACCENT_HOVER@"
 AVAILABLE_THEMES: tuple[tuple[str, str], ...] = (
     ("dark", "Dark"),
     ("light", "Light"),
+    ("midnight_blue", "Midnight Blue"),
+    ("emerald", "Emerald"),
+    ("colorblind_friendly", "Colorblind Friendly"),
 )
 
 

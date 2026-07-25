@@ -138,6 +138,11 @@ class Project(TimestampMixin, Base):
     collection_links: Mapped[list["CollectionProject"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
+    episodes: Mapped[list["Episode"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="(Episode.season_number, Episode.episode_number)",
+    )
 
     def __repr__(self) -> str:  # pragma: no cover - debug convenience only
         return f"<Project id={self.id} title={self.title!r}>"

@@ -187,6 +187,45 @@ def resolve_marvel_television_company_id(client: TMDBClient) -> int:
     return MARVEL_TELEVISION_FALLBACK_COMPANY_ID
 
 
+def _extract_trailer_url(videos: dict | None) -> str | None:
+    """Picks the best trailer out of a TMDB details response's embedded
+    `videos` object (see get_movie_details/get_tv_details's
+    append_to_response=videos), or None if it has no YouTube trailer at
+    all -- not every title does, especially older or lower-profile ones.
+
+    Preference order: an official trailer first, then any trailer, then
+    an official teaser, then any teaser -- a teaser is still a real,
+    useful preview when a full trailer isn't available, but a genuine
+    trailer is always the better pick when both exist. TMDB only ever
+    returns this data for videos hosted on YouTube or Vimeo; anything
+    not on YouTube is skipped, since the rest of this app's trailer
+    handling (the URL parser, the thumbnail preview) is YouTube-specific.
+    """
+    if not videos:
+        return None
+
+    results = videos.get("results") or []
+    youtube_videos = [v for v in results if v.get("site") == "YouTube" and v.get("key")]
+    if not youtube_videos:
+        return None
+
+    def _pick(video_type: str, official_only: bool) -> dict | None:
+        candidates = [v for v in youtube_videos if v.get("type") == video_type]
+        if official_only:
+            candidates = [v for v in candidates if v.get("official")]
+        return candidates[0] if candidates else None
+
+    best = (
+        _pick("Trailer", official_only=True)
+        or _pick("Trailer", official_only=False)
+        or _pick("Teaser", official_only=True)
+        or _pick("Teaser", official_only=False)
+    )
+    if best is None:
+        return None
+    return f"https://www.youtube.com/watch?v={best['key']}"
+
+
 def _get_or_create_genre(session: Session, name: str) -> Genre:
     genre = session.scalar(select(Genre).where(Genre.name == name))
     if genre is None:
@@ -281,6 +320,7 @@ def _apply_common_fields(
     background_path: str | None,
     status: ProjectStatus,
     genre_objs: list[Genre],
+    trailer_url: str | None = None,
 ) -> None:
     project.title = title
     project.synopsis = synopsis
@@ -291,6 +331,7 @@ def _apply_common_fields(
     project.background_path = background_path
     project.status = status
     project.genres = genre_objs
+    project.trailer_url = trailer_url
     # Deliberately NOT touched: universe_id, franchise_id, saga, phase,
     # chronological_order, in_universe_date, season_count, episode_count,
     # cancelled_date, next_season_release_date, production_start_date --
@@ -339,6 +380,7 @@ def _sync_movie(
         background_path=image_url(details.get("backdrop_path"), size="w1280"),
         status=status,
         genre_objs=genre_objs,
+        trailer_url=_extract_trailer_url(details.get("videos")),
     )
     session.flush()
 
@@ -394,6 +436,7 @@ def _sync_tv(
         background_path=image_url(details.get("backdrop_path"), size="w1280"),
         status=status,
         genre_objs=genre_objs,
+        trailer_url=_extract_trailer_url(details.get("videos")),
     )
     session.flush()
 
@@ -467,3 +510,138 @@ def sync_from_tmdb(
     result.people_created = people_created[0]
     logger.info("TMDB sync complete: %s", result.summary())
     return result
+
+
+@dataclass(frozen=True)
+class TMDBSearchResult:
+    """One candidate from search_tmdb() -- enough for the user to tell
+    which (if any) is the project they meant."""
+
+    tmdb_id: int
+    title: str
+    year: int | None
+    overview: str
+
+
+def search_tmdb(client: TMDBClient, query: str, project_type: ProjectType) -> list[TMDBSearchResult]:
+    """Searches TMDB directly by title -- unlike sync_from_tmdb(), which
+    only ever discovers titles attributed to a specific company (Marvel
+    Studios' own TMDB entry), so it would never find Fox's X-Men films,
+    Sony's Spider-Man/Venom films, New Line's Blade films, or anything
+    else made by a studio other than Marvel Studios itself, even if
+    TMDB has a perfectly good entry for it under that other studio.
+
+    This is the read-only first step of manually linking one specific
+    project to its real TMDB entry (see link_project_to_tmdb) when it
+    wasn't going to be found by the automatic sync -- the user picks
+    the right match out of these results themselves, since only they
+    can actually verify it (this app has no way to confirm which
+    result, if any, is correct)."""
+    raw_results = (
+        client.search_movie(query) if project_type == ProjectType.MOVIE else client.search_tv(query)
+    )
+
+    results = []
+    for raw in raw_results:
+        title = raw.get("title") or raw.get("name") or raw.get("original_title") or raw.get("original_name")
+        date_str = raw.get("release_date") or raw.get("first_air_date")
+        parsed_date = _parse_date(date_str)
+        results.append(
+            TMDBSearchResult(
+                tmdb_id=raw["id"],
+                title=title or "Untitled",
+                year=parsed_date.year if parsed_date else None,
+                overview=raw.get("overview") or "",
+            )
+        )
+    return results
+
+
+def link_project_to_tmdb(
+    project_id: int,
+    tmdb_id: int,
+    project_type: ProjectType,
+    api_key: str,
+    *,
+    client: TMDBClient | None = None,
+) -> None:
+    """Links an existing project (one with no tmdb_id of its own, e.g.
+    one of the ~45 movies/shows added by hand rather than through a
+    sync) to a specific TMDB entry the user picked out of search_tmdb()'s
+    results, then immediately pulls that entry's full details onto it --
+    synopsis, runtime, studio, poster/backdrop art, genres, trailer, and
+    cast/crew, exactly like a real sync would, just for this one project
+    instead of everything discoverable under Marvel Studios' company id.
+
+    `client` can be injected for testing, same as sync_from_tmdb(); a
+    real TMDBClient is constructed from `api_key` otherwise.
+
+    Deliberately does NOT touch this app's own curation fields (universe,
+    franchise, saga, phase, chronological_order, in_universe_date,
+    season/episode counts, cancellation/next-season/production-start
+    dates) -- same protection _apply_common_fields already gives every
+    other synced project, see this module's own docstring."""
+    tmdb = client or TMDBClient(api_key)
+
+    with session_scope() as session:
+        project = session.get(Project, project_id)
+        if project is None:
+            raise ValueError(f"No project with id={project_id}")
+
+        details = (
+            tmdb.get_movie_details(tmdb_id)
+            if project_type == ProjectType.MOVIE
+            else tmdb.get_tv_details(tmdb_id)
+        )
+
+        if project_type == ProjectType.MOVIE:
+            title = details.get("title") or details.get("original_title") or project.title
+            release_date = _parse_date(details.get("release_date"))
+            runtime_minutes = details.get("runtime") or None
+        else:
+            title = details.get("name") or details.get("original_name") or project.title
+            release_date = _parse_date(details.get("first_air_date"))
+            episode_runtimes = details.get("episode_run_time") or []
+            runtime_minutes = episode_runtimes[0] if episode_runtimes else None
+
+        status = _map_status(details.get("status"), release_date)
+        genre_objs = [_get_or_create_genre(session, g["name"]) for g in details.get("genres", [])]
+        production_companies = details.get("production_companies") or []
+        studio = production_companies[0]["name"] if production_companies else None
+
+        # tmdb_id has a UNIQUE constraint -- if some other project in the
+        # library is already linked to this exact TMDB entry, saving
+        # would otherwise fail with a raw, unhelpful database error.
+        # This happens more often than it might seem: TMDB search
+        # results for a query like "Agent Carter" surface both the TV
+        # series *and* its own tie-in one-shot short as separate,
+        # similarly-named entries, and it's an easy mix-up to pick the
+        # one that's actually already linked to a different project.
+        conflicting_project = session.scalar(
+            select(Project).where(Project.tmdb_id == tmdb_id, Project.id != project_id)
+        )
+        if conflicting_project is not None:
+            raise TMDBError(
+                f'This TMDB entry is already linked to "{conflicting_project.title}" in your '
+                "library. Search again and make sure you're picking the result for "
+                f'"{project.title}" specifically, not a same-named short, one-shot, or spin-off.'
+            )
+
+        project.tmdb_id = tmdb_id
+        _apply_common_fields(
+            project,
+            title=title,
+            synopsis=details.get("overview") or None,
+            release_date=release_date,
+            runtime_minutes=runtime_minutes,
+            studio=studio,
+            poster_path=image_url(details.get("poster_path")),
+            background_path=image_url(details.get("backdrop_path"), size="w1280"),
+            status=status,
+            genre_objs=genre_objs,
+            trailer_url=_extract_trailer_url(details.get("videos")),
+        )
+        session.flush()
+
+        people_created = [0]
+        _sync_cast_and_crew(session, project, details.get("credits") or {}, people_created)

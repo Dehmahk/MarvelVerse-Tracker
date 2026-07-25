@@ -51,6 +51,7 @@ _ICON_EMOJI = {
     "web": "🕸️",
     "stream": "📡",
     "gauntlet": "🧤",
+    "mystery": "❓",
     "dagger": "🗡️",
     "venom": "🖤",
     "chimichanga": "🌮",

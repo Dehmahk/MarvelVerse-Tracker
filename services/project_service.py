@@ -405,6 +405,7 @@ class WatchHistoryItem:
     watched_at: datetime
     is_rewatch: bool
     notes: str | None
+    watched_with: str | None
 
 
 @dataclass(frozen=True)
@@ -464,6 +465,7 @@ class ProjectDetail:
     watch_history: tuple[WatchHistoryItem, ...]
     previous_in_timeline: TimelineNeighbor | None
     next_in_timeline: TimelineNeighbor | None
+    tmdb_id: int | None
 
 
 def get_project_detail(project_id: int) -> ProjectDetail | None:
@@ -511,6 +513,7 @@ def get_project_detail(project_id: int) -> ProjectDetail | None:
                 watched_at=w.watched_at,
                 is_rewatch=w.is_rewatch,
                 notes=w.notes,
+                watched_with=w.watched_with,
             )
             for w in project.watch_history
         )
@@ -554,6 +557,7 @@ def get_project_detail(project_id: int) -> ProjectDetail | None:
             watch_history=watch_history,
             previous_in_timeline=_timeline_neighbor(session, project.chronological_order, "previous"),
             next_in_timeline=_timeline_neighbor(session, project.chronological_order, "next"),
+            tmdb_id=project.tmdb_id,
         )
     return detail
 
@@ -672,7 +676,7 @@ def get_surprise_me_pick() -> int | None:
     return row.id if row is not None else None
 
 
-def log_watch(project_id: int, *, notes: str | None = None) -> ProjectDetail:
+def log_watch(project_id: int, *, notes: str | None = None, watched_with: str | None = None) -> ProjectDetail:
     """Record a watch event for a project: appends a WatchHistoryEntry,
     marks it watched, stamps today as the last-watched date, and -- if it
     was already watched -- increments rewatch_count. Owns its own session
@@ -692,7 +696,14 @@ def log_watch(project_id: int, *, notes: str | None = None) -> ProjectDetail:
         user_data.watched = True
         user_data.last_watched_date = date.today()
 
-        session.add(WatchHistoryEntry(project_id=project_id, is_rewatch=is_rewatch, notes=notes))
+        session.add(
+            WatchHistoryEntry(
+                project_id=project_id,
+                is_rewatch=is_rewatch,
+                notes=notes,
+                watched_with=watched_with,
+            )
+        )
 
     detail = get_project_detail(project_id)
     assert detail is not None  # the project existed a moment ago in this same call

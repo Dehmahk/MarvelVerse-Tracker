@@ -182,15 +182,17 @@ class TMDBClient:
     # --- details (single item, with credits) ---------------------------------
 
     def get_movie_details(self, movie_id: int) -> dict[str, Any]:
-        """Full movie record including an embedded ``credits`` object
-        (cast + crew), fetched in one round trip via ``append_to_response``."""
-        return self._get(f"/movie/{movie_id}", {"append_to_response": "credits"})
+        """Full movie record including embedded ``credits`` (cast + crew)
+        and ``videos`` (trailers, teasers, ...) objects, fetched in one
+        round trip via ``append_to_response``."""
+        return self._get(f"/movie/{movie_id}", {"append_to_response": "credits,videos"})
 
     def get_tv_details(self, tv_id: int) -> dict[str, Any]:
-        """Full TV record including an embedded ``credits`` object. Note
-        TMDB's TV credits endpoint returns *aggregate* cast/crew across all
-        seasons, which is what `append_to_response=credits` gives here."""
-        return self._get(f"/tv/{tv_id}", {"append_to_response": "credits"})
+        """Full TV record including embedded ``credits`` and ``videos``
+        objects. Note TMDB's TV credits endpoint returns *aggregate*
+        cast/crew across all seasons, which is what
+        `append_to_response=credits` gives here."""
+        return self._get(f"/tv/{tv_id}", {"append_to_response": "credits,videos"})
 
     # --- search (manual lookups / fallback) -----------------------------------
 

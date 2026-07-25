@@ -8,10 +8,12 @@ import shiboken6
 from PySide6.QtCore import QPoint, Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QPainter, QPixmap, QPolygon
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDoubleSpinBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -220,7 +222,11 @@ class ProjectDetailView(QWidget):
     # than needing its own.
     navigate_to_project_requested = Signal(int)
     user_data_field_changed = Signal(int, str, object)
-    log_watch_requested = Signal(int)
+    log_watch_requested = Signal(int, str)
+    find_on_tmdb_requested = Signal(int)
+    person_activated = Signal(int)
+    episode_toggled = Signal(int, bool)
+    season_toggled = Signal(int, int, bool)
 
     def __init__(self, enable_trailer_embed: bool = False) -> None:
         super().__init__()
@@ -230,6 +236,7 @@ class ProjectDetailView(QWidget):
         self._trailer_url: str | None = None
         self._previous_project_id: int | None = None
         self._trailer_video_id: str | None = None
+        self._is_current_project_tv_shaped = False
         self._next_project_id: int | None = None
         self._suspend_signals = False
 
@@ -262,6 +269,7 @@ class ProjectDetailView(QWidget):
         self._build_activity_panel()
         self._build_cast_crew_panel()
         self._build_watch_history_panel()
+        self._build_episodes_panel()
         self._content_layout.addStretch()
 
         self.scroll_area.setWidget(content)
@@ -284,6 +292,17 @@ class ProjectDetailView(QWidget):
         self.trailer_button.clicked.connect(self._on_trailer_clicked)
         self.trailer_button.hide()  # only shown by set_project() when trailer_url is set
         header_actions.addWidget(self.trailer_button)
+
+        self.find_on_tmdb_button = QPushButton("Find on TMDB…")
+        self.find_on_tmdb_button.setObjectName("secondaryButton")
+        self.find_on_tmdb_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.find_on_tmdb_button.setToolTip(
+            "Search TMDB and link this project to a specific entry -- pulls "
+            "in poster art, synopsis, cast/crew, and trailer once linked."
+        )
+        self.find_on_tmdb_button.clicked.connect(self._on_find_on_tmdb_clicked)
+        self.find_on_tmdb_button.hide()  # only shown by set_project() when tmdb_id is None
+        header_actions.addWidget(self.find_on_tmdb_button)
         header_actions.addStretch()
 
         self.previous_timeline_button = QPushButton("←  Previous in Timeline")
@@ -371,6 +390,14 @@ class ProjectDetailView(QWidget):
             ("Cancelled", "fact_cancelled"),
             ("Next Season", "fact_next_season"),
         ]
+        # Facts only meaningful for TV-shaped content (a movie has no
+        # "seasons" or "next season release date") -- their title+value
+        # pair is hidden entirely for movies/shorts/documentaries rather
+        # than just showing "—", see set_project()'s use of
+        # self._tv_only_fact_widgets below.
+        _TV_ONLY_ATTRS = {"fact_season_count", "fact_episode_count", "fact_cancelled", "fact_next_season"}
+        self._tv_only_fact_widgets: list[tuple[QLabel, QLabel]] = []
+
         for index, (label_text, attr_name) in enumerate(fact_defs):
             grid_row, grid_col = divmod(index, 2)
             label = QLabel(label_text.upper())
@@ -379,6 +406,8 @@ class ProjectDetailView(QWidget):
             value.setObjectName("detailFactValue")
             value.setWordWrap(True)
             setattr(self, attr_name, value)
+            if attr_name in _TV_ONLY_ATTRS:
+                self._tv_only_fact_widgets.append((label, value))
 
             pair = QVBoxLayout()
             pair.setSpacing(2)
@@ -524,6 +553,33 @@ class ProjectDetailView(QWidget):
 
         self._content_layout.addWidget(panel)
 
+    def _build_episodes_panel(self) -> None:
+        # Only shown for TV-shaped projects with episodes actually
+        # generated for them -- see set_episodes(). Movies/shorts/
+        # documentaries never show this panel at all.
+        self.episodes_panel = QFrame()
+        self.episodes_panel.setObjectName("contentPanel")
+        layout = QVBoxLayout(self.episodes_panel)
+        layout.setContentsMargins(22, 18, 22, 18)
+        layout.setSpacing(10)
+
+        heading_row = QHBoxLayout()
+        heading = QLabel("Episodes")
+        heading.setObjectName("sectionHeading")
+        heading_row.addWidget(heading)
+        heading_row.addStretch()
+        self.episodes_progress_label = QLabel("")
+        self.episodes_progress_label.setObjectName("statSubtitle")
+        heading_row.addWidget(self.episodes_progress_label)
+        layout.addLayout(heading_row)
+
+        self.episodes_container_layout = QVBoxLayout()
+        self.episodes_container_layout.setSpacing(14)
+        layout.addLayout(self.episodes_container_layout)
+
+        self._content_layout.addWidget(self.episodes_panel)
+        self.episodes_panel.hide()
+
     def _build_watch_history_panel(self) -> None:
         panel = QFrame()
         panel.setObjectName("contentPanel")
@@ -553,6 +609,7 @@ class ProjectDetailView(QWidget):
             self._project_id = detail.id
             self._trailer_url = detail.trailer_url
             self.trailer_button.setVisible(bool(detail.trailer_url))
+            self.find_on_tmdb_button.setVisible(detail.tmdb_id is None)
             self._update_trailer_embed(detail.trailer_url)
 
             previous = detail.previous_in_timeline
@@ -605,6 +662,13 @@ class ProjectDetailView(QWidget):
                 else "—"
             )
 
+            is_tv_shaped = _enum_value(detail.project_type) in ("tv_series", "animated_series", "tv_special")
+            for title_label, value_label in self._tv_only_fact_widgets:
+                title_label.setVisible(is_tv_shaped)
+                value_label.setVisible(is_tv_shaped)
+            self._is_current_project_tv_shaped = is_tv_shaped
+            self.episodes_panel.setVisible(is_tv_shaped)
+
             self.synopsis_label.setText(detail.synopsis or "No synopsis available yet.")
 
             self.watched_toggle.setChecked(detail.watched)
@@ -622,6 +686,74 @@ class ProjectDetailView(QWidget):
             self._render_watch_history(detail.watch_history)
         finally:
             self._suspend_signals = False
+
+    def set_episodes(self, episodes) -> None:
+        """Populates the Episodes panel from a tuple of duck-typed
+        services.episode_service.EpisodeItem objects, grouped by season.
+        Called separately from set_project() by the controller, once
+        episodes have actually been generated/fetched for the current
+        TV show -- an empty tuple (a movie, or a TV show with no
+        season_count/episode_count to generate from) just clears the
+        panel back to empty rather than erroring."""
+        self._clear_layout(self.episodes_container_layout)
+
+        if not episodes:
+            self.episodes_progress_label.setText("")
+            return
+
+        watched_count = sum(1 for e in episodes if e.watched)
+        self.episodes_progress_label.setText(f"{watched_count} / {len(episodes)} watched")
+
+        seasons: dict[int, list] = {}
+        for episode in episodes:
+            seasons.setdefault(episode.season_number, []).append(episode)
+
+        for season_number in sorted(seasons):
+            season_episodes = seasons[season_number]
+            season_watched = sum(1 for e in season_episodes if e.watched)
+
+            season_widget = QWidget()
+            season_layout = QVBoxLayout(season_widget)
+            season_layout.setContentsMargins(0, 0, 0, 0)
+            season_layout.setSpacing(4)
+
+            header_row = QHBoxLayout()
+            season_label = QLabel(f"Season {season_number}  ({season_watched}/{len(season_episodes)})")
+            season_label.setObjectName("statSubtitle")
+            header_row.addWidget(season_label)
+            header_row.addStretch()
+
+            all_watched = season_watched == len(season_episodes)
+            mark_button = QPushButton("Mark Unwatched" if all_watched else "Mark Season Watched")
+            mark_button.setObjectName("secondaryButton")
+            mark_button.clicked.connect(
+                lambda _checked=False, s=season_number, w=not all_watched: self.season_toggled.emit(
+                    self._project_id, s, w
+                )
+            )
+            header_row.addWidget(mark_button)
+            season_layout.addLayout(header_row)
+
+            episodes_row = QHBoxLayout()
+            episodes_row.setSpacing(4)
+            for i, episode in enumerate(season_episodes):
+                checkbox = QCheckBox(f"E{episode.episode_number}")
+                checkbox.setToolTip(episode.display_title)
+                checkbox.setChecked(episode.watched)
+                checkbox.toggled.connect(
+                    lambda checked, episode_id=episode.id: self.episode_toggled.emit(episode_id, checked)
+                )
+                episodes_row.addWidget(checkbox)
+                # Wrap into rows of 10 so a 20+ episode season doesn't
+                # produce one absurdly wide horizontal strip.
+                if (i + 1) % 10 == 0 and i + 1 < len(season_episodes):
+                    season_layout.addLayout(episodes_row)
+                    episodes_row = QHBoxLayout()
+                    episodes_row.setSpacing(4)
+            episodes_row.addStretch()
+            season_layout.addLayout(episodes_row)
+
+            self.episodes_container_layout.addWidget(season_widget)
 
     # --- rendering --------------------------------------------------------------
 
@@ -660,7 +792,7 @@ class ProjectDetailView(QWidget):
             self.cast_list_layout.addWidget(empty)
         else:
             for member in cast:
-                text = html.escape(member.name)
+                text = f'<a href="person:{member.person_id}">{html.escape(member.name)}</a>'
                 if member.character_name:
                     text += (
                         f" <span style='color:#686D78;'>as "
@@ -669,6 +801,9 @@ class ProjectDetailView(QWidget):
                 label = QLabel(text)
                 label.setObjectName("castCrewEntry")
                 label.setWordWrap(True)
+                label.setTextFormat(Qt.TextFormat.RichText)
+                label.setCursor(Qt.CursorShape.PointingHandCursor)
+                label.linkActivated.connect(self._on_cast_crew_link_clicked)
                 self.cast_list_layout.addWidget(label)
 
         self._clear_layout(self.crew_list_layout)
@@ -679,13 +814,21 @@ class ProjectDetailView(QWidget):
         else:
             for member in crew:
                 text = (
-                    f"{html.escape(member.name)} "
+                    f'<a href="person:{member.person_id}">{html.escape(member.name)}</a> '
                     f"<span style='color:#686D78;'>— {html.escape(member.role)}</span>"
                 )
                 label = QLabel(text)
                 label.setObjectName("castCrewEntry")
                 label.setWordWrap(True)
+                label.setTextFormat(Qt.TextFormat.RichText)
+                label.setCursor(Qt.CursorShape.PointingHandCursor)
+                label.linkActivated.connect(self._on_cast_crew_link_clicked)
                 self.crew_list_layout.addWidget(label)
+
+    def _on_cast_crew_link_clicked(self, href: str) -> None:
+        if href.startswith("person:"):
+            person_id = int(href.removeprefix("person:"))
+            self.person_activated.emit(person_id)
 
     def _render_watch_history(self, watch_history) -> None:
         self._clear_layout(self.history_list_layout)
@@ -698,6 +841,8 @@ class ProjectDetailView(QWidget):
         for entry in watch_history:
             verb = "Rewatched" if entry.is_rewatch else "Watched"
             text = f"{verb} on {format_long_date(entry.watched_at)}"
+            if entry.watched_with:
+                text += f" with {html.escape(entry.watched_with)}"
             if entry.notes:
                 text += f" — {html.escape(entry.notes)}"
             label = QLabel(text)
@@ -728,8 +873,18 @@ class ProjectDetailView(QWidget):
         self._emit_field("notes", text or None)
 
     def _on_log_watch_clicked(self) -> None:
+        if self._project_id is None:
+            return
+        watched_with, _ok = QInputDialog.getText(
+            self,
+            "Log Watch",
+            "Watched with (optional):",
+        )
+        self.log_watch_requested.emit(self._project_id, watched_with.strip())
+
+    def _on_find_on_tmdb_clicked(self) -> None:
         if self._project_id is not None:
-            self.log_watch_requested.emit(self._project_id)
+            self.find_on_tmdb_requested.emit(self._project_id)
 
     def _on_trailer_clicked(self) -> None:
         if self._trailer_url:

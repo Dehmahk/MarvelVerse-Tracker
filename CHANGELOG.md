@@ -1,5 +1,186 @@
 # Changelog
 
+## 1.1.0 — Content expansion, quality-of-life batch, and hidden achievements
+
+A large batch of work spanning content expansion, new features, bug
+fixes, and polish. Grouped by theme rather than narrated turn-by-turn,
+given the scope.
+
+### Catalog & Data
+
+- Catalog expanded from 148 to 193 projects: added Fox's full X-Men
+  library (with dedicated Original Timeline, Post-Days of Future Past
+  Timeline, Deadpool, and Independent Canon franchises), Sony's
+  Raimi/Amazing Spider-Man/Venom/Morbius films, the Blade trilogy,
+  Ghost Rider, Fantastic Four legacy films, Punisher films, and the
+  Marvel Lego Universe shorts. Two new universes (`SpiderVerse
+  (Multiverse Canon)`, `Marvel Multiverse (Legacy/Parallel Canon)`) and
+  one legacy-comics universe (`Marvel Comics Universe (Earth-616)`).
+- Synopsis/genre/studio/cast/crew backfilled for the expansion batch —
+  synopses written fresh in original wording (never copied from an
+  outside source); cast/crew are factual credits research, not creative
+  content. Remaining known gaps (a handful of shorts/specials with no
+  confidently-sourceable credits) left honestly blank rather than
+  guessed.
+- New `Project` fields: `season_count`, `episode_count`,
+  `cancelled_date`, `next_season_release_date` (TV only),
+  `production_start_date`, and `tmdb_id` conflict protection (see Bug
+  Fixes below). The four TV-only fact fields are now hidden entirely on
+  movie/short/documentary Project Details pages rather than showing a
+  meaningless "—".
+- `services/data_integrity_service.py` (new): a read-only audit —
+  duplicate title+year, duplicate `tmdb_id`, duplicate slugs, missing
+  synopsis/genres/cast/runtime on released projects, and
+  franchise/universe assignments where a majority of a franchise's own
+  members disagree with the franchise's universe. Triggered from
+  Settings → Data & Storage → "Run Data Integrity Check"; never
+  modifies anything.
+
+### New Pages & Major Features
+
+- **Calendar** (new sidebar page): a real month-by-month calendar of
+  every dated release in the catalog, past and future, with
+  Previous/Next/Today navigation and click-through to Project Details.
+- **Actor/Director Pages** (new): click any cast/crew name on Project
+  Details to see their bio, photo, and every credit in the library
+  (cast and crew credits tracked separately), sorted newest first.
+  Back-navigation correctly chains Person → Project → wherever the
+  project was originally activated from.
+- **Episode-level tracking** (new): TV shows get a per-episode watch
+  tracker, grouped by season, generated locally from a show's own
+  `season_count`/`episode_count` (split as evenly as possible across
+  seasons, since there's no real per-season count to draw from) the
+  first time its episodes are viewed. Mark individual episodes, or a
+  whole season at once.
+- **Compare with a Friend** (new): import a friend's exported personal
+  data (the existing "Export My Data" format) and see what you've both
+  watched, what only you've seen, and what only they've seen, with an
+  overlap percentage — read-only on both sides, nothing is merged into
+  your own library. Rejects an incompatible/corrupt/missing file with a
+  clear message rather than a raw error.
+- **"Find on TMDB"** (new): for a project with no linked TMDB entry
+  (mostly the expansion batch above, since the automatic sync only ever
+  discovers titles under Marvel Studios' own TMDB company id), search
+  TMDB directly by title and link the correct result yourself. Pulls
+  full details onto the existing project without touching its curation
+  fields (universe, franchise, saga, phase, timeline position).
+- **TMDB video/trailer sync** (new): `get_movie_details`/
+  `get_tv_details` now fetch trailer/teaser data alongside cast/crew;
+  a new extraction step prefers an official trailer, then any trailer,
+  then an official teaser, then any teaser, and only ever considers
+  YouTube-hosted videos.
+- **First-launch TMDB onboarding popup** (new): shown whenever no API
+  key is configured yet (skipped entirely if the `TMDB_API_KEY`
+  environment variable is set) — explains what a key unlocks, warns
+  plainly that the app won't run at full capacity without one, links
+  directly to TMDB's sign-up and API settings pages, and triggers an
+  immediate sync the moment a key is saved. A "don't ask again"
+  checkbox persists across launches if declined.
+
+### Trailer Playback (revised)
+
+- The original approach embedded a real player via `QtWebEngine`. This
+  was replaced after it failed in a real packaged build badly enough to
+  take the "Watch Trailer" button down with it — a native-level failure
+  inside a bundled Chromium subprocess isn't something a Python
+  try/except can catch or recover from. Replaced with a clickable
+  YouTube thumbnail preview (fetched through the same proven, disk-cached
+  image loader every poster in the app already uses) with a play-button
+  overlay, opening the real video in the browser on click. Zero
+  Chromium, zero subprocess, zero native crash surface.
+
+### Achievements
+
+- 10 new hidden ("secret") achievements added under a new Marvelous-tier
+  batch: Perfect Order, Déjà Vu, Right on Time, Triple Feature, Quiet
+  Completionist, Social Circle, Marathon Runner, The Answer to
+  Everything, Renaissance Fan, and Full Circle (86 achievements total,
+  up from 76). A hidden achievement's real name/description/icon are
+  masked as "???" at the service layer itself (not just hidden in the
+  UI) until unlocked, so the secret can't leak through some other code
+  path later.
+- New `AchievementCriteriaType.HIDDEN_SPECIAL`, dispatched by the
+  achievement's own `key` to bespoke Python checks rather than trying to
+  force these into the existing generic count/percent criteria types.
+
+### Personalization & Accessibility
+
+- New **Colorblind Friendly** theme (5th theme, alongside Dark, Light,
+  Midnight Blue, and Emerald) — audited the app for red/green pairs used
+  to convey meaning and found one real one (the sync status "OK"/"Error"
+  chips); fixed to a blue/orange pairing distinguishable across
+  deuteranopia, protanopia, and tritanopia alike.
+- **Poster hover preview**: hovering a card in Grid/Poster view for
+  ~500ms shows a larger version of its poster in a tooltip-style popup,
+  without navigating away. Lazily created per-card (no extra window
+  created for a card that's never actually hovered).
+- **"Watched with" field**: an optional note on each watch event (not
+  each project) recording who you watched something with — a quick
+  prompt appears when logging a watch, shown inline in the watch history
+  list.
+- **Native OS desktop notifications**: a real system-tray notification
+  for anything releasing today (separate from the existing in-app
+  "releases in N days" status-bar reminder), on by default, toggleable
+  in Settings → Notifications. Gracefully does nothing on a setup with
+  no system tray at all.
+- **Marvel Fact of the Day**: a new Dashboard section, one fact shown
+  per calendar day (deterministic by date, not re-randomized on every
+  refresh) from a curated list. Originally 30 entries written from
+  general background knowledge; trimmed to 25 after a deliberate
+  self-audit removed anything only moderately confident or overly
+  specific, since this environment has no way to verify facts against
+  an outside source. A visible in-app caveat now says as much ("General
+  trivia, not independently fact-checked against an outside source"),
+  not just a code comment.
+- Timeline's default sort mode changed from Phase to Chronological
+  Order.
+- Splash screen support (`packaging/assets/splashscreen.png`, entirely
+  optional — the app starts normally with no splash if the file isn't
+  present).
+- New "About" section at the bottom of Settings: GitHub/Discord/Buy Me a
+  Coffee links, a keyboard shortcuts reference, a changelog link,
+  credits for the libraries this app is built on, and diagnostics tools
+  (open the log folder, copy version/OS/Qt info to the clipboard for a
+  bug report).
+
+### Bug Fixes
+
+- **`tmdb_id` conflict on Find on TMDB**: TMDB search results for a
+  query like "Agent Carter" can surface both a TV series and its own
+  tie-in one-shot as separate, similarly-named entries; picking the one
+  already linked to a different project used to fail with a raw,
+  unhelpful `sqlite3.IntegrityError`. Now checked before saving, with a
+  clear message identifying the conflicting project by name.
+  Reproduced the exact reported scenario in a dedicated test.
+- **Intermittent segfault in the test suite**: a background `QThread`
+  (any of `TMDBSyncWorker`/`TMDBSearchWorker`/`TMDBLinkWorker`/
+  `UpdateCheckWorker`/`UpdateDownloadWorker`) still running when a test
+  function returned could have its completion signal fire against a
+  widget pytest-qt had already torn down — landing the crash on
+  whichever *next* test happened to run, not the one that actually
+  caused it, which made it very hard to pin down. Fixed with a single
+  autouse fixture that waits for any of the `QApplication`'s own
+  `QThread` children after every test, rather than trying to
+  individually audit and mock every path that could spawn one.
+- A settings-view test that changed the Timeline sort combo to
+  "chronological" silently stopped testing anything real once that
+  became the new default (setting a combo to its already-current value
+  never fires a change signal) — caught and fixed to toggle to "phase"
+  instead.
+
+### Process note
+
+- A `rm -f data/marvelverse.db` intended to reset test-polluted state
+  during this batch of work deleted the *entire* real catalog — 193
+  hand-curated projects, none of which are reproducible by reseeding
+  (only reference data like universes/franchises/genres/achievements
+  gets reseeded, not the actual catalog). Recovered in full from the
+  most recently delivered build; verified by literally re-extracting
+  that zip and counting projects before continuing. No data was
+  ultimately lost, but this is flagged here as a reminder that this
+  file is precious and copy-first testing (which is now the standing
+  practice for anything touching it) exists for exactly this reason.
+
 ## 0.11.0 — Milestone 11 complete: Themes and settings
 
 ### Added

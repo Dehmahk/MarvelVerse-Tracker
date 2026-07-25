@@ -61,11 +61,17 @@ class ApplicationController:
         # it's the visible page -- and re-announcing the same upcoming
         # release every time would be spammy, not helpful).
         self._release_reminder_shown = False
+        self._native_release_notification_shown = False
+        self._current_project_detail_type = None
         self._tmdb_sync_thread = None
         self._update_check_thread = None
         self._update_download_thread = None
         self._latest_update_info = None
         self._update_prompt_shown = False
+        self._tmdb_search_thread = None
+        self._tmdb_link_thread = None
+        self._find_on_tmdb_project_id = None
+        self._find_on_tmdb_project_type = None
 
         # Page keys ("library", "dashboard", "timeline", "achievements")
         # whose data is out of date and needs recomputing before it's next
@@ -87,6 +93,8 @@ class ApplicationController:
         self.main_window.refresh_requested.connect(self._on_refresh_requested)
         self.main_window.surprise_me_requested.connect(self._on_surprise_me_requested)
         self.main_window.check_for_updates_requested.connect(self._on_check_for_updates_requested)
+        self.main_window.run_data_integrity_check_requested.connect(self._on_run_data_integrity_check_requested)
+        self.main_window.find_on_tmdb_requested.connect(self._on_find_on_tmdb_requested)
         self.main_window.install_update_requested.connect(self._on_install_update_requested)
         self.main_window.search_changed.connect(self._on_search_changed)
 
@@ -98,6 +106,9 @@ class ApplicationController:
         library.clear_filters_requested.connect(self._on_library_clear_filters)
 
         self.main_window.project_activated.connect(self._on_project_activated)
+        self.main_window.person_activated.connect(self._on_person_activated)
+        self.main_window.episode_toggled.connect(self._on_episode_toggled)
+        self.main_window.season_toggled.connect(self._on_season_toggled)
         self.main_window.collection_activated.connect(self._on_collection_activated_from_dashboard)
         self.main_window.user_data_field_changed.connect(self._on_user_data_field_changed)
         self.main_window.log_watch_requested.connect(self._on_log_watch_requested)
@@ -110,6 +121,7 @@ class ApplicationController:
         self.main_window.delete_backup_requested.connect(self._on_delete_backup_requested)
         self.main_window.export_requested.connect(self._on_export_requested)
         self.main_window.import_requested.connect(self._on_import_requested)
+        self.main_window.compare_with_friend_requested.connect(self._on_compare_with_friend_requested)
         self.main_window.page_changed.connect(self._on_active_page_changed)
         self.main_window.preferences_changed.connect(self._on_preferences_changed)
 
@@ -137,6 +149,7 @@ class ApplicationController:
         self._load_timeline_filter_options()
         self._load_timeline_saga_options()
         self._refresh_timeline()
+        self._refresh_calendar()
         self._refresh_collections_list()
         self._refresh_achievements()
         self._refresh_backups()
@@ -155,6 +168,7 @@ class ApplicationController:
         self._refresh_library_page()
         self._refresh_dashboard_stats()
         self._refresh_timeline()
+        self._refresh_calendar()
         self._refresh_achievements()
         if self.main_window is not None:
             self._notify("Refreshed")
@@ -257,6 +271,21 @@ class ApplicationController:
 
     def _on_check_for_updates_requested(self) -> None:
         self._start_update_check(manual=True)
+
+    def _on_run_data_integrity_check_requested(self) -> None:
+        if self.main_window is None:
+            return
+
+        from services.data_integrity_service import check_data_integrity
+
+        try:
+            issues = check_data_integrity()
+        except Exception:
+            logger.exception("Data integrity check failed")
+            self.main_window.show_status_message("Data integrity check failed -- check logs")
+            return
+
+        self.main_window.settings_view.show_data_integrity_results(issues)
 
     def _on_install_update_requested(self) -> None:
         """Downloads the update whose availability was already reported
@@ -361,6 +390,7 @@ class ApplicationController:
             "library": self._refresh_library_page,
             "dashboard": self._refresh_dashboard_stats,
             "timeline": self._refresh_timeline,
+            "calendar": self._refresh_calendar,
             "achievements": self._refresh_achievements,
         }.get(page_key)
         if refresh_fn is not None:
@@ -526,6 +556,88 @@ class ApplicationController:
             return
 
         self.main_window.show_project_detail(detail)
+        self._current_project_detail_type = detail.project_type
+        self._refresh_project_episodes(project_id, detail.project_type)
+
+    def _refresh_project_episodes(self, project_id: int, project_type) -> None:
+        """Loads (generating first if needed) episode data for a
+        TV-shaped project and pushes it into the Episodes panel; clears
+        the panel for anything else. Split out from _on_project_activated
+        so episode_toggled/season_toggled handlers can also call this
+        same refresh after a change, without duplicating the TV-shaped
+        check and error handling."""
+        if self.main_window is None:
+            return
+
+        from models import ProjectType
+
+        if project_type not in (ProjectType.TV_SERIES, ProjectType.ANIMATED_SERIES, ProjectType.TV_SPECIAL):
+            self.main_window.set_project_episodes(())
+            return
+
+        from services.episode_service import ensure_episodes_exist, get_episodes
+
+        try:
+            ensure_episodes_exist(project_id)
+            episodes = get_episodes(project_id)
+        except Exception:
+            logger.exception("Failed to load episodes for project id=%s", project_id)
+            return
+
+        self.main_window.set_project_episodes(episodes)
+
+    def _on_episode_toggled(self, episode_id: int, watched: bool) -> None:
+        if self.main_window is None:
+            return
+
+        from services.episode_service import set_episode_watched
+
+        try:
+            set_episode_watched(episode_id, watched)
+        except Exception:
+            logger.exception("Failed to toggle episode id=%s", episode_id)
+            self.main_window.show_status_message("Failed to update episode -- check logs")
+            return
+
+        current_project_id = self.main_window.project_detail_view._project_id
+        current_project_type = self._current_project_detail_type
+        if current_project_id is not None:
+            self._refresh_project_episodes(current_project_id, current_project_type)
+
+    def _on_season_toggled(self, project_id: int, season_number: int, watched: bool) -> None:
+        if self.main_window is None:
+            return
+
+        from services.episode_service import mark_season_watched
+
+        try:
+            mark_season_watched(project_id, season_number, watched)
+        except Exception:
+            logger.exception("Failed to toggle season %s for project id=%s", season_number, project_id)
+            self.main_window.show_status_message("Failed to update season -- check logs")
+            return
+
+        self._refresh_project_episodes(project_id, self._current_project_detail_type)
+
+    def _on_person_activated(self, person_id: int) -> None:
+        if self.main_window is None:
+            return
+
+        from services.person_service import get_person_detail
+
+        try:
+            detail = get_person_detail(person_id)
+        except Exception:
+            logger.exception("Failed to load person detail for id=%s", person_id)
+            self.main_window.show_status_message("Failed to load actor/director details -- check logs")
+            return
+
+        if detail is None:
+            logger.warning("Person id=%s activated but no longer exists", person_id)
+            self.main_window.show_status_message("That person could not be found.")
+            return
+
+        self.main_window.show_person_detail(detail)
 
     def _on_collection_activated_from_dashboard(self, collection_id: int) -> None:
         """The Dashboard's Collections spotlight "View Collection" button
@@ -571,11 +683,11 @@ class ApplicationController:
 
         self._mark_pages_stale_and_refresh_visible()
 
-    def _on_log_watch_requested(self, project_id: int) -> None:
+    def _on_log_watch_requested(self, project_id: int, watched_with: str) -> None:
         from services.project_service import log_watch
 
         try:
-            detail = log_watch(project_id)
+            detail = log_watch(project_id, watched_with=watched_with or None)
         except Exception:
             logger.exception("Failed to log a watch for project id=%s", project_id)
             if self.main_window is not None:
@@ -651,6 +763,22 @@ class ApplicationController:
 
         self.main_window.set_timeline_groups(groups)
         self._stale_pages.discard("timeline")
+
+    def _refresh_calendar(self) -> None:
+        if self.main_window is None:
+            return
+
+        from services.calendar_service import get_calendar_projects
+
+        try:
+            projects = get_calendar_projects()
+        except Exception:
+            logger.exception("Failed to load calendar")
+            self.main_window.show_status_message("Failed to load calendar -- check logs")
+            return
+
+        self.main_window.calendar_view.set_projects(projects)
+        self._stale_pages.discard("calendar")
 
     # --- collections -------------------------------------------------------------
 
@@ -854,6 +982,10 @@ class ApplicationController:
         self._stale_pages.discard("dashboard")
         self._maybe_show_release_reminder(stats)
 
+        from services.fun_facts_service import get_fact_of_the_day
+
+        self.main_window.dashboard_view.set_fact_of_the_day(get_fact_of_the_day().text)
+
     def _maybe_show_release_reminder(self, stats) -> None:
         """Once per session, if the soonest "Coming Soon" release is
         within a week, surface it as a status message -- a lightweight
@@ -882,6 +1014,32 @@ class ApplicationController:
         else:
             when = f"in {days_until} days"
         self._notify(f"🎬 {soonest.title} releases {when}!")
+
+        self._maybe_show_native_release_day_notification(stats)
+
+    def _maybe_show_native_release_day_notification(self, stats) -> None:
+        """A real OS desktop notification (separate from the in-app
+        status message above), specifically for anything releasing
+        *today* -- once per session, and only if the user hasn't turned
+        it off in Settings > Notifications."""
+        if self._native_release_notification_shown or self.main_window is None:
+            return
+        if not self.config.notify_release_day_native:
+            return
+
+        from datetime import date
+
+        todays_releases = [r for r in stats.upcoming_releases if r.release_date == date.today()]
+        if not todays_releases:
+            return
+
+        self._native_release_notification_shown = True
+        if len(todays_releases) == 1:
+            message = f'"{todays_releases[0].title}" is out today!'
+        else:
+            titles = ", ".join(r.title for r in todays_releases[:3])
+            message = f"Out today: {titles}"
+        self.main_window.show_native_notification("New Marvel Release", message)
 
     def _refresh_achievements(self) -> None:
         """Recompute achievement progress/unlocks and push the result into
@@ -1094,6 +1252,103 @@ class ApplicationController:
         if manual:
             self.main_window.show_status_message("TMDB sync failed -- check logs")
 
+    # --- Find on TMDB (manual search + link, for projects a full sync -----------
+    # would never discover -- see search_tmdb()'s own docstring) ----------------
+
+    def _on_find_on_tmdb_requested(self, project_id: int) -> None:
+        if self.main_window is None:
+            return
+        if self._tmdb_search_thread is not None or self._tmdb_link_thread is not None:
+            self.main_window.show_status_message("A TMDB lookup is already in progress.")
+            return
+
+        api_key = self.config.resolved_tmdb_api_key()
+        if not api_key:
+            self.main_window.show_status_message("Add a TMDB API key in Settings first.")
+            return
+
+        from services.project_service import get_project_detail
+
+        detail = get_project_detail(project_id)
+        if detail is None:
+            return
+
+        from controllers.tmdb_search_worker import TMDBSearchWorker
+
+        self._find_on_tmdb_project_id = project_id
+        self._find_on_tmdb_project_type = detail.project_type
+        self.main_window.show_status_message(f'Searching TMDB for "{detail.title}"…')
+
+        worker = TMDBSearchWorker(api_key, detail.title, detail.project_type, self.app)
+        worker.succeeded.connect(lambda results: self._on_tmdb_search_succeeded(results, detail.title))
+        worker.failed.connect(self._on_tmdb_search_failed)
+        worker.finished.connect(self._on_tmdb_search_thread_finished)
+        self._tmdb_search_thread = worker
+        worker.start()
+
+    def _on_tmdb_search_thread_finished(self) -> None:
+        self._tmdb_search_thread = None
+
+    def _on_tmdb_search_failed(self, message: str) -> None:
+        if self.main_window is None:
+            return
+        logger.error("TMDB search failed: %s", message)
+        self.main_window.show_status_message(f"TMDB search failed: {message}")
+
+    def _on_tmdb_search_succeeded(self, results, title: str) -> None:
+        if self.main_window is None:
+            return
+
+        from views.widgets.tmdb_link_dialog import TMDBLinkDialog
+
+        dialog = TMDBLinkDialog(results, title, self.main_window)
+        if dialog.exec() != TMDBLinkDialog.DialogCode.Accepted or dialog.selected_result is None:
+            return
+
+        project_id = self._find_on_tmdb_project_id
+        project_type = self._find_on_tmdb_project_type
+        if project_id is None or project_type is None:
+            return
+
+        api_key = self.config.resolved_tmdb_api_key()
+        if not api_key:
+            self.main_window.show_status_message("Add a TMDB API key in Settings first.")
+            return
+
+        from controllers.tmdb_link_worker import TMDBLinkWorker
+
+        self.main_window.show_status_message(f'Linking to "{dialog.selected_result.title}"…')
+
+        worker = TMDBLinkWorker(project_id, dialog.selected_result.tmdb_id, project_type, api_key, self.app)
+        worker.succeeded.connect(self._on_tmdb_link_succeeded)
+        worker.failed.connect(self._on_tmdb_link_failed)
+        worker.finished.connect(self._on_tmdb_link_thread_finished)
+        self._tmdb_link_thread = worker
+        worker.start()
+
+    def _on_tmdb_link_thread_finished(self) -> None:
+        self._tmdb_link_thread = None
+
+    def _on_tmdb_link_failed(self, message: str) -> None:
+        if self.main_window is None:
+            return
+        logger.error("TMDB link failed: %s", message)
+        self.main_window.show_status_message(f"Couldn't link to TMDB: {message}")
+
+    def _on_tmdb_link_succeeded(self, project_id: int) -> None:
+        if self.main_window is None:
+            return
+        self.main_window.show_status_message("Linked to TMDB.")
+
+        # Refresh whatever's currently showing this project, plus the
+        # library/dashboard/timeline, since new poster art/genres/cast
+        # can affect all of them -- same "mark stale, refresh what's
+        # visible" pattern every other mutating action in this app uses.
+        if self.main_window.current_page_key() == "project_detail":
+            self._on_project_activated(project_id)
+        self._stale_pages.update({"library", "dashboard", "timeline", "calendar"})
+        self._refresh_stale_page(self._current_page_key())
+
     # --- Backups (Milestone 10) -----------------------------------------------
 
     def _refresh_backups(self) -> None:
@@ -1244,6 +1499,26 @@ class ApplicationController:
             return
 
         self.main_window.set_import_export_status(summary.summary())
+
+    def _on_compare_with_friend_requested(self, path: str) -> None:
+        if self.main_window is None:
+            return
+
+        from pathlib import Path
+
+        from services.comparison_service import ComparisonFileError, compare_with_friend_export
+
+        try:
+            result = compare_with_friend_export(Path(path))
+        except ComparisonFileError as exc:
+            self.main_window.set_import_export_status(str(exc))
+            return
+        except Exception:
+            logger.exception("Failed to compare with friend export at %s", path)
+            self.main_window.set_import_export_status("Comparison failed -- check logs.")
+            return
+
+        self.main_window.settings_view.show_comparison_results(result)
         self._notify("Import complete")
 
         # Imported data can touch watched/rating/rewatch/achievement state

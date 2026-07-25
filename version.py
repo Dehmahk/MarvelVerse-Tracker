@@ -14,10 +14,10 @@ as an available update no matter how far ahead of it the actual code is.
 """
 from __future__ import annotations
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 # When APP_VERSION above was last bumped -- shown in the About section
 # alongside the version number itself. Update both together.
-APP_VERSION_DATE = "2026-07-24"
+APP_VERSION_DATE = "2026-07-25"
 
 # When this project was first created -- shown as-is in the About
 # section's Information panel; not meant to change again.

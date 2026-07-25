@@ -19,6 +19,7 @@ from views.widgets.dashboard_widgets import (
     BreakdownRow,
     CollectionSpotlightCard,
     ProgressRing,
+    OnThisDayChip,
     UpcomingReleaseChip,
     UpNextCard,
 )
@@ -323,6 +324,49 @@ class DashboardView(QWidget):
         layout.addWidget(self.upcoming_panel)
         self._set_upcoming_container()
 
+        # --- on this day --------------------------------------------------------
+        self.on_this_day_panel = QFrame()
+        self.on_this_day_panel.setObjectName("contentPanel")
+        on_this_day_layout = QVBoxLayout(self.on_this_day_panel)
+        on_this_day_title = QLabel("On This Day")
+        on_this_day_title.setObjectName("sectionHeading")
+        on_this_day_layout.addWidget(on_this_day_title)
+
+        self.on_this_day_scroll = QScrollArea()
+        self.on_this_day_scroll.setObjectName("libraryScrollArea")
+        self.on_this_day_scroll.setWidgetResizable(True)
+        self.on_this_day_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.on_this_day_scroll.setFixedHeight(190)
+        self.on_this_day_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.on_this_day_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        on_this_day_layout.addWidget(self.on_this_day_scroll)
+
+        self.on_this_day_empty_label = QLabel("Nothing released on this date, as far as your library knows.")
+        self.on_this_day_empty_label.setObjectName("emptyState")
+        on_this_day_layout.addWidget(self.on_this_day_empty_label)
+
+        layout.addWidget(self.on_this_day_panel)
+        self._set_on_this_day_container()
+
+        # --- fact of the day ------------------------------------------------------
+        fact_panel = QFrame()
+        fact_panel.setObjectName("contentPanel")
+        fact_layout = QVBoxLayout(fact_panel)
+        fact_title = QLabel("🎬 Marvel Fact of the Day")
+        fact_title.setObjectName("sectionHeading")
+        fact_layout.addWidget(fact_title)
+
+        self.fact_of_the_day_label = QLabel("")
+        self.fact_of_the_day_label.setObjectName("factOfTheDayText")
+        self.fact_of_the_day_label.setWordWrap(True)
+        fact_layout.addWidget(self.fact_of_the_day_label)
+
+        fact_caveat = QLabel("General trivia, not independently fact-checked against an outside source.")
+        fact_caveat.setObjectName("rowSubtitle")
+        fact_layout.addWidget(fact_caveat)
+
+        layout.addWidget(fact_panel)
+
         # --- recently watched + top rated --------------------------------
         lists_row = QHBoxLayout()
         lists_row.setSpacing(16)
@@ -448,6 +492,12 @@ class DashboardView(QWidget):
         container.setLayout(self._upcoming_flow)
         self.upcoming_scroll.setWidget(container)
 
+    def _set_on_this_day_container(self) -> None:
+        container = QWidget()
+        self._on_this_day_flow = FlowLayout(container, margin=0, spacing=12)
+        container.setLayout(self._on_this_day_flow)
+        self.on_this_day_scroll.setWidget(container)
+
     def _clear_layout(self, layout) -> None:
         while layout.count():
             child = layout.takeAt(0)
@@ -469,6 +519,9 @@ class DashboardView(QWidget):
         self._accent_color = accent_color or DEFAULT_ACCENT
         self.completion_card.set_accent(self._accent_color)
         self.activity_chart.set_accent(self._accent_color)
+
+    def set_fact_of_the_day(self, text: str) -> None:
+        self.fact_of_the_day_label.setText(text)
 
     def set_stats(self, stats) -> None:
         """Refresh every stat card, breakdown panel, and list from a
@@ -515,6 +568,7 @@ class DashboardView(QWidget):
         self._set_genre_breakdown(stats.genre_breakdown)
         self.activity_chart.set_months(stats.monthly_activity)
         self._set_upcoming_releases(stats.upcoming_releases)
+        self._set_on_this_day(stats.on_this_day)
 
     def set_closest_achievement(self, status) -> None:
         """`status` is a duck-typed
@@ -654,3 +708,16 @@ class DashboardView(QWidget):
             chip = UpcomingReleaseChip(release)
             chip.clicked.connect(self.project_activated.emit)
             self._upcoming_flow.addWidget(chip)
+
+    def _set_on_this_day(self, items) -> None:
+        self._set_on_this_day_container()
+        if not items:
+            self.on_this_day_scroll.setVisible(False)
+            self.on_this_day_empty_label.setVisible(True)
+            return
+        self.on_this_day_scroll.setVisible(True)
+        self.on_this_day_empty_label.setVisible(False)
+        for item in items:
+            chip = OnThisDayChip(item)
+            chip.clicked.connect(self.project_activated.emit)
+            self._on_this_day_flow.addWidget(chip)

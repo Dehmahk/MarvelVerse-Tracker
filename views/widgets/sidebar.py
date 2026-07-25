@@ -14,6 +14,7 @@ NAV_ENTRIES: list[tuple[str, str, str]] = [
     ("⌂", "Dashboard", "Dashboard"),
     ("▦", "Library", "Library"),
     ("◷", "Timeline", "Timeline"),
+    ("📅", "Calendar", "Calendar"),
     ("▣", "Collections", "Collections"),
     ("🏆", "Achievements", "Achievements"),
     ("⚙", "Settings", "Settings"),

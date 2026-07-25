@@ -98,10 +98,50 @@ QLabel#statIcon {
 
 /* --- Dashboard: Up Next hero card --------------------------------------- */
 
+QFrame#posterHoverPreview {
+    background: #181A20;
+    border: 2px solid @ACCENT@;
+    border-radius: 12px;
+}
+
+QLabel#posterHoverPreviewTitle {
+    color: #D7D9DE;
+    font-size: 13px;
+    font-weight: 600;
+}
+
 QFrame#upNextCard {
     background: #181A20;
     border: 1px solid @ACCENT@;
     border-radius: 12px;
+}
+
+QFrame#calendarDayCell {
+    background: #181A20;
+    border: 1px solid #30343D;
+    border-radius: 8px;
+}
+
+QFrame#calendarDayCellToday {
+    background: #181A20;
+    border: 2px solid @ACCENT@;
+    border-radius: 8px;
+}
+
+QLabel#calendarDayNumber {
+    color: #A8ABB3;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#calendarReleaseTitle {
+    color: #D7D9DE;
+    font-size: 11px;
+}
+
+QLabel#calendarMoreLabel {
+    color: #686D78;
+    font-size: 10px;
 }
 
 QLabel#upNextEyebrow {
@@ -484,6 +524,12 @@ QLabel#detailFactValue {
 QLabel#detailSynopsis {
     color: #C3C6CC;
     font-size: 14px;
+}
+
+QLabel#factOfTheDayText {
+    color: #C3C6CC;
+    font-size: 14px;
+    font-style: italic;
 }
 
 QLabel#detailNoData {

@@ -10,7 +10,7 @@ DEFAULT_LIBRARY_PAGE_SIZE = 24  # matches services.project_service.DEFAULT_PAGE_
 DEFAULT_LIBRARY_SHOW_UPCOMING = True
 
 # --- Timeline -----------------------------------------------------------------
-DEFAULT_TIMELINE_SORT_MODE = "phase"  # services.timeline_service.TimelineSortMode value
+DEFAULT_TIMELINE_SORT_MODE = "chronological"  # services.timeline_service.TimelineSortMode value
 # Matches services.timeline_service.SAGAS_EXCLUDED_FROM_CHRONOLOGICAL's
 # original hardcoded set -- now the *default* rather than the only option,
 # since Settings lets the user edit this list per-catalog.
@@ -44,6 +44,7 @@ DEFAULT_AUTO_BACKUP_RETENTION_COUNT = 5
 
 # --- Notifications --------------------------------------------------------------
 DEFAULT_NOTIFY_ACHIEVEMENT_UNLOCKS = True
+DEFAULT_NOTIFY_RELEASE_DAY_NATIVE = True
 DEFAULT_NOTIFY_STATUS_MESSAGES = True
 DEFAULT_ACHIEVEMENT_SOUND_ENABLED = False
 

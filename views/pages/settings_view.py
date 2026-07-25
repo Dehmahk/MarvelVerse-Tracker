@@ -89,7 +89,7 @@ _DATE_FORMAT_OPTIONS = [
 # that order) -- there's no shared constant for that mapping to import, so
 # this list is the one place that order is duplicated. Labels themselves
 # come from NAV_ENTRIES so they can't drift from the sidebar's own wording.
-_LANDING_PAGE_KEYS = ["dashboard", "library", "timeline", "collections", "achievements", "settings"]
+_LANDING_PAGE_KEYS = ["dashboard", "library", "timeline", "calendar", "collections", "achievements", "settings"]
 _LANDING_PAGE_OPTIONS = [
     (key, NAV_ENTRIES[i][1]) for i, key in enumerate(_LANDING_PAGE_KEYS)
 ]
@@ -176,6 +176,7 @@ class SettingsView(QWidget):
     delete_backup_requested = Signal(str)  # backup file path
     export_requested = Signal(str)  # destination file path
     import_requested = Signal(str)  # source file path
+    compare_with_friend_requested = Signal(str)  # friend's export file path
     appearance_changed = Signal()
     # Emitted whenever any of the Library & Browsing / Timeline /
     # Notifications / Personalization / Privacy / Data & Sync panels
@@ -185,6 +186,7 @@ class SettingsView(QWidget):
     # visible.
     preferences_changed = Signal()
     check_for_updates_requested = Signal()
+    run_data_integrity_check_requested = Signal()
     install_update_requested = Signal()
 
     def __init__(self, config: AppConfig) -> None:
@@ -708,6 +710,17 @@ class SettingsView(QWidget):
         self.clear_cache_button.setObjectName("secondaryButton")
         self.clear_cache_button.clicked.connect(self._on_clear_cache_clicked)
         button_row.addWidget(self.clear_cache_button)
+
+        self.run_integrity_check_button = QPushButton("Run Data Integrity Check")
+        self.run_integrity_check_button.setObjectName("secondaryButton")
+        self.run_integrity_check_button.setToolTip(
+            "Scans your library for likely duplicates, missing details, and "
+            "inconsistent universe/franchise assignments. Read-only -- it "
+            "never changes anything, only reports what it finds."
+        )
+        self.run_integrity_check_button.clicked.connect(self._on_run_integrity_check_clicked)
+        button_row.addWidget(self.run_integrity_check_button)
+
         button_row.addStretch()
         panel_layout.addLayout(button_row)
 
@@ -936,6 +949,14 @@ class SettingsView(QWidget):
         self.notify_status_checkbox.toggled.connect(self._commit_notifications_settings)
         panel_layout.addWidget(self.notify_status_checkbox)
 
+        self.notify_release_day_native_checkbox = QCheckBox(
+            "Show a native desktop notification when something releases today"
+        )
+        self.notify_release_day_native_checkbox.setObjectName("preferenceCheckbox")
+        self.notify_release_day_native_checkbox.setChecked(self.config.notify_release_day_native)
+        self.notify_release_day_native_checkbox.toggled.connect(self._commit_notifications_settings)
+        panel_layout.addWidget(self.notify_release_day_native_checkbox)
+
         self.achievement_sound_checkbox = QCheckBox("Play a sound when I unlock an achievement")
         self.achievement_sound_checkbox.setObjectName("preferenceCheckbox")
         self.achievement_sound_checkbox.setChecked(self.config.achievement_sound_enabled)
@@ -1115,6 +1136,16 @@ class SettingsView(QWidget):
         self.import_button.setObjectName("secondaryButton")
         self.import_button.clicked.connect(self._on_import_clicked)
         button_row.addWidget(self.import_button)
+
+        self.compare_with_friend_button = QPushButton("Compare with a Friend…")
+        self.compare_with_friend_button.setObjectName("secondaryButton")
+        self.compare_with_friend_button.setToolTip(
+            "Pick a friend's exported data file (from their own Export My Data) to "
+            "see what you've both watched, without importing or changing anything "
+            "in your own library."
+        )
+        self.compare_with_friend_button.clicked.connect(self._on_compare_with_friend_clicked)
+        button_row.addWidget(self.compare_with_friend_button)
 
         button_row.addStretch()
         panel_layout.addLayout(button_row)
@@ -1399,6 +1430,9 @@ class SettingsView(QWidget):
         self.storage_status_label.setText("Saved.")
         self._refresh_cache_size_label()
 
+    def _on_run_integrity_check_clicked(self) -> None:
+        self.run_data_integrity_check_requested.emit()
+
     def _on_clear_cache_clicked(self) -> None:
         removed = image_loader.clear_cache()
         self.storage_status_label.setText(
@@ -1416,6 +1450,7 @@ class SettingsView(QWidget):
     def _commit_notifications_settings(self) -> None:
         self.config.notify_achievement_unlocks = self.notify_achievements_checkbox.isChecked()
         self.config.notify_status_messages = self.notify_status_checkbox.isChecked()
+        self.config.notify_release_day_native = self.notify_release_day_native_checkbox.isChecked()
         self.config.achievement_sound_enabled = self.achievement_sound_checkbox.isChecked()
         self.config.save()
         self.notifications_status_label.setText("Saved.")
@@ -1559,6 +1594,12 @@ class SettingsView(QWidget):
                 lambda: self.notify_status_checkbox.setChecked(self.config.notify_status_messages),
             ),
             (
+                self.notify_release_day_native_checkbox,
+                lambda: self.notify_release_day_native_checkbox.setChecked(
+                    self.config.notify_release_day_native
+                ),
+            ),
+            (
                 self.achievement_sound_checkbox,
                 lambda: self.achievement_sound_checkbox.setChecked(self.config.achievement_sound_enabled),
             ),
@@ -1641,7 +1682,20 @@ class SettingsView(QWidget):
         if path:
             self.import_requested.emit(path)
 
+    def _on_compare_with_friend_clicked(self) -> None:
+        path, _selected_filter = QFileDialog.getOpenFileName(
+            self, "Compare with a Friend", "", "JSON Files (*.json)"
+        )
+        if path:
+            self.compare_with_friend_requested.emit(path)
+
     # --- controller-facing API ---------------------------------------------
+
+    def show_comparison_results(self, result) -> None:
+        from views.widgets.comparison_dialog import ComparisonDialog
+
+        dialog = ComparisonDialog(result, self)
+        dialog.exec()
 
     def set_sync_in_progress(self, in_progress: bool) -> None:
         """Disable the sync button and show a busy message while a sync
@@ -1680,6 +1734,12 @@ class SettingsView(QWidget):
         self.check_updates_button.setEnabled(not in_progress)
         if in_progress:
             self.update_status_label.setText("Checking for updates…")
+
+    def show_data_integrity_results(self, issues) -> None:
+        from views.widgets.data_integrity_dialog import DataIntegrityDialog
+
+        dialog = DataIntegrityDialog(issues, self)
+        dialog.exec()
 
     def set_no_update_available(self) -> None:
         self.update_status_label.setText("You're on the latest version.")

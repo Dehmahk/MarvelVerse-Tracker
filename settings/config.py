@@ -27,6 +27,7 @@ from settings.defaults import (
     DEFAULT_LIBRARY_VIEW_MODE,
     DEFAULT_MASK_RATINGS,
     DEFAULT_NOTIFY_ACHIEVEMENT_UNLOCKS,
+    DEFAULT_NOTIFY_RELEASE_DAY_NATIVE,
     DEFAULT_NOTIFY_STATUS_MESSAGES,
     DEFAULT_POSTER_CARD_SIZE,
     DEFAULT_RATING_SCALE,
@@ -99,6 +100,12 @@ class AppConfig:
     # actually completed, scheduled or manual -- the anchor
     # tmdb_auto_sync_interval_days counts forward from.
     tmdb_last_synced_at: str | None = None
+    # True once the user has explicitly dismissed the first-launch "add
+    # your TMDB API key" prompt (see main.py) without entering one --
+    # without this, that prompt would reappear every single launch for
+    # as long as no key is configured, which would be naggy for anyone
+    # who's deliberately chosen to skip TMDB integration.
+    dismissed_api_key_prompt: bool = False
 
     # --- Milestone 11/12: Library & Browsing defaults -----------------------
     library_default_view_mode: str = DEFAULT_LIBRARY_VIEW_MODE
@@ -131,6 +138,13 @@ class AppConfig:
 
     # --- Notifications -----------------------------------------------------------
     notify_achievement_unlocks: bool = DEFAULT_NOTIFY_ACHIEVEMENT_UNLOCKS
+    # Native OS desktop notification (via the system tray) when
+    # something in the library releases today -- separate from the
+    # existing in-app "releases in N days" status-bar reminder, which
+    # stays exactly as it was; this is specifically for the day itself,
+    # and pops up outside the app window the same way any other desktop
+    # notification would.
+    notify_release_day_native: bool = DEFAULT_NOTIFY_RELEASE_DAY_NATIVE
     notify_status_messages: bool = DEFAULT_NOTIFY_STATUS_MESSAGES
     achievement_sound_enabled: bool = DEFAULT_ACHIEVEMENT_SOUND_ENABLED
 
@@ -216,6 +230,7 @@ class AppConfig:
                         )
                     ),
                     tmdb_last_synced_at=data.get("tmdb_last_synced_at"),
+                    dismissed_api_key_prompt=bool(data.get("dismissed_api_key_prompt", False)),
                     library_default_view_mode=data.get(
                         "library_default_view_mode", defaults.library_default_view_mode
                     ),
@@ -262,6 +277,9 @@ class AppConfig:
                     auto_backup_last_run_at=data.get("auto_backup_last_run_at"),
                     notify_achievement_unlocks=bool(
                         data.get("notify_achievement_unlocks", defaults.notify_achievement_unlocks)
+                    ),
+                    notify_release_day_native=bool(
+                        data.get("notify_release_day_native", defaults.notify_release_day_native)
                     ),
                     notify_status_messages=bool(
                         data.get("notify_status_messages", defaults.notify_status_messages)

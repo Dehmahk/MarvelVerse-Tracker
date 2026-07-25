@@ -11,6 +11,7 @@ from resource_paths import resource_root
 from settings.config import AppConfig
 from services.logging_service import configure_logging
 from views.font_scaling import apply_font_scale
+from views.widgets.tmdb_onboarding_dialog import TMDBOnboardingDialog
 
 # Where to put splashscreen.png -- packaging/assets/ already holds the app
 # icon, so this keeps every branding image asset in one place.
@@ -18,6 +19,34 @@ from views.font_scaling import apply_font_scale
 # a packaged .exe; running from source, resource_root() just resolves to
 # the project root directly.
 SPLASH_IMAGE_PATH = resource_root() / "packaging" / "assets" / "splashscreen.png"
+
+
+def _maybe_show_tmdb_onboarding(controller: ApplicationController) -> None:
+    """Shown once the main window is up, if there's no TMDB API key
+    configured yet (checked via resolved_tmdb_api_key(), so a
+    TMDB_API_KEY environment variable also correctly suppresses this)
+    and the user hasn't previously dismissed it for good. Collecting the
+    key is the dialog's job; actually saving it, reflecting it in
+    Settings, and kicking off a first sync are this function's."""
+    config = controller.config
+    if config.resolved_tmdb_api_key() or config.dismissed_api_key_prompt:
+        return
+    if controller.main_window is None:
+        return
+
+    dialog = TMDBOnboardingDialog(controller.main_window)
+    dialog.exec()
+
+    if dialog.dismissed_permanently:
+        config.dismissed_api_key_prompt = True
+        config.save()
+
+    if dialog.entered_key:
+        config.tmdb_api_key = dialog.entered_key
+        config.save()
+        controller.main_window.settings_view.api_key_input.setText(dialog.entered_key)
+        controller.main_window.show_status_message("TMDB API key saved -- syncing now…")
+        controller._run_tmdb_sync(manual=True)
 
 
 def main() -> int:
@@ -55,6 +84,8 @@ def main() -> int:
 
     if splash is not None and controller.main_window is not None:
         splash.finish(controller.main_window)
+
+    _maybe_show_tmdb_onboarding(controller)
 
     return app.exec()
 

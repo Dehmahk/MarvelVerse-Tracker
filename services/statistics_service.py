@@ -191,6 +191,21 @@ class UpcomingRelease:
 
 
 @dataclass(frozen=True)
+class OnThisDayItem:
+    """One project that released on today's month/day in some past year
+    -- for the Dashboard's "On This Day" widget. `years_ago` is always
+    >= 1 (today's actual release-year, if any, isn't a past anniversary
+    yet, so it's excluded rather than showing "0 years ago")."""
+
+    project_id: int
+    title: str
+    project_type: ProjectType
+    poster_path: str | None
+    release_date: date
+    years_ago: int
+
+
+@dataclass(frozen=True)
 class UpNextItem:
     """The single suggested "watch this next" project -- the first
     unreleased-excluded, not-yet-watched project in chronological order.
@@ -226,6 +241,7 @@ class DashboardStats:
     monthly_activity: tuple[MonthlyActivity, ...]
     upcoming_releases: tuple[UpcomingRelease, ...]
     up_next: UpNextItem | None
+    on_this_day: tuple[OnThisDayItem, ...]
 
     @property
     def completion_percent(self) -> int:
@@ -516,6 +532,35 @@ def get_dashboard_stats(recent_limit: int = DEFAULT_RECENT_LIMIT) -> DashboardSt
             else None
         )
 
+        # On This Day: any project whose release_date shares today's
+        # month/day, in a past year -- matched via SQLite's strftime
+        # rather than pulling every release_date into Python, since the
+        # catalog only grows over time and this runs on every Dashboard
+        # refresh. Excludes today's own year (not a past anniversary
+        # yet) and anything with no release_date at all (nothing to
+        # compare).
+        today = date.today()
+        on_this_day_rows = session.execute(
+            select(Project)
+            .where(
+                Project.release_date.is_not(None),
+                func.strftime("%m-%d", Project.release_date) == today.strftime("%m-%d"),
+                func.strftime("%Y", Project.release_date) != today.strftime("%Y"),
+            )
+            .order_by(Project.release_date.desc())
+        ).scalars().all()
+        on_this_day = tuple(
+            OnThisDayItem(
+                project_id=p.id,
+                title=p.title,
+                project_type=p.project_type,
+                poster_path=p.poster_path,
+                release_date=p.release_date,
+                years_ago=today.year - p.release_date.year,
+            )
+            for p in on_this_day_rows
+        )
+
     stats = DashboardStats(
         total_projects=total_projects,
         watched_count=watched_count,
@@ -533,6 +578,7 @@ def get_dashboard_stats(recent_limit: int = DEFAULT_RECENT_LIMIT) -> DashboardSt
         monthly_activity=monthly_activity,
         upcoming_releases=upcoming_releases,
         up_next=up_next,
+        on_this_day=on_this_day,
     )
     logger.debug("Dashboard stats: %s", stats)
     return stats

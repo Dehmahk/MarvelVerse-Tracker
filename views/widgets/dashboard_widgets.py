@@ -301,6 +301,53 @@ class UpcomingReleaseChip(QFrame):
         super().mousePressEvent(event)
 
 
+class OnThisDayChip(QFrame):
+    """One small poster+title+anniversary tile in the Dashboard's "On
+    This Day" strip. Takes a duck-typed
+    services.statistics_service.OnThisDayItem."""
+
+    clicked = Signal(int)
+
+    def __init__(self, item, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("upcomingChip")
+        self._project_id = item.project_id
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedWidth(120)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        poster = PosterLabel(corner_radius=8)
+        poster.setFixedSize(104, 104)
+        poster.set_poster(item.poster_path, item.title)
+        layout.addWidget(poster, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        title = QLabel(item.title)
+        title.setObjectName("upcomingChipTitle")
+        title.setWordWrap(True)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+
+        date_label = QLabel(format_long_date(item.release_date))
+        date_label.setObjectName("rowSubtitle")
+        date_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(date_label)
+
+        years_label = QLabel(
+            "1 year ago today" if item.years_ago == 1 else f"{item.years_ago} years ago today"
+        )
+        years_label.setObjectName("upcomingChipCountdown")
+        years_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(years_label)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit(self._project_id)
+        super().mousePressEvent(event)
+
+
 class CollectionSpotlightCard(QFrame):
     """A small preview of one Collection, encouraging a visit to the
     Collections page. Takes a duck-typed

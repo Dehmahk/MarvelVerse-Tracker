@@ -15,6 +15,7 @@ from models.tag import Tag, project_tags
 from models.person import Person, ProjectCast, ProjectCrew
 from models.project import Project, ProjectType, ProjectStatus
 from models.user_data import UserProjectData
+from models.episode import Episode
 from models.watch_history import WatchHistoryEntry
 from models.collection import Collection, CollectionProject
 from models.achievement import (
@@ -40,6 +41,7 @@ __all__ = [
     "ProjectType",
     "ProjectStatus",
     "UserProjectData",
+    "Episode",
     "WatchHistoryEntry",
     "Collection",
     "CollectionProject",

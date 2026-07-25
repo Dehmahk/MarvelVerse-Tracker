@@ -37,3 +37,9 @@ dist/
 *.swp
 .DS_Store
 Thumbs.db
+
+# --- Excluded from this repo by choice -----------------------------------------
+# Test suite and its dev-only dependency list -- kept locally, not
+# published to this GitHub repo.
+/tests/
+/requirements-dev.txt

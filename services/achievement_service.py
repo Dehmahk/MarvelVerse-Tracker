@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import joinedload
@@ -31,6 +31,7 @@ from models import (
     Universe,
     UserAchievement,
     UserProjectData,
+    WatchHistoryEntry,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ _COMPLETION_CRITERIA = frozenset(
         AchievementCriteriaType.FRANCHISE_COMPLETE,
         AchievementCriteriaType.COLLECTION_COMPLETE,
         AchievementCriteriaType.ALL_ACHIEVEMENTS_COMPLETE,
+        AchievementCriteriaType.HIDDEN_SPECIAL,
     }
 )
 
@@ -82,6 +84,7 @@ class AchievementStatus:
     criteria_value: int
     progress_current: int
     unlocked_at: datetime | None
+    is_hidden: bool = False
 
     @property
     def is_unlocked(self) -> bool:
@@ -224,6 +227,192 @@ def _sort_key(status: AchievementStatus) -> tuple:
     return (1, -status.percent_complete, _TIER_ORDER.get(status.tier, 99), status.key)
 
 
+def _hidden_perfect_order(session) -> bool:
+    """Watch every Phase One MCU film, each one's *first* watch coming
+    later than the previous film's first watch, in the same order the
+    films actually released -- i.e. actually watched it in Phase One's
+    real release order, not just watched all six eventually."""
+    phase_one = session.scalars(
+        select(Project).where(Project.phase == "Phase One", Project.release_date.is_not(None))
+        .order_by(Project.release_date.asc())
+    ).all()
+    if len(phase_one) < 2:
+        return False
+
+    first_watches: list[datetime] = []
+    for project in phase_one:
+        earliest = session.scalar(
+            select(func.min(WatchHistoryEntry.watched_at)).where(
+                WatchHistoryEntry.project_id == project.id
+            )
+        )
+        if earliest is None:
+            return False
+        first_watches.append(earliest)
+
+    return all(first_watches[i] < first_watches[i + 1] for i in range(len(first_watches) - 1))
+
+
+def _hidden_deja_vu(session) -> bool:
+    """Rewatched the same single project 10 or more times."""
+    max_rewatches = session.scalar(select(func.max(UserProjectData.rewatch_count)))
+    return (max_rewatches or 0) >= 10
+
+
+def _hidden_right_on_time(session) -> bool:
+    """Watched something on the exact calendar anniversary (month and
+    day, in a later year) of its own release date -- not just "sometime
+    after release," the actual day it came out, years later."""
+    rows = session.execute(
+        select(WatchHistoryEntry.watched_at, Project.release_date)
+        .join(Project, WatchHistoryEntry.project_id == Project.id)
+        .where(Project.release_date.is_not(None))
+    ).all()
+    for watched_at, release_date in rows:
+        if (
+            watched_at.month == release_date.month
+            and watched_at.day == release_date.day
+            and watched_at.year > release_date.year
+        ):
+            return True
+    return False
+
+
+def _hidden_triple_feature(session) -> bool:
+    """3 or more distinct projects watched on the same calendar day."""
+    rows = session.execute(
+        select(func.date(WatchHistoryEntry.watched_at), func.count(func.distinct(WatchHistoryEntry.project_id)))
+        .group_by(func.date(WatchHistoryEntry.watched_at))
+    ).all()
+    return any(count >= 3 for _day, count in rows)
+
+
+def _hidden_quiet_completionist(session) -> bool:
+    """50+ watched projects, but not a single one of them rated --
+    watching in complete, quiet volume."""
+    watched_count = session.scalar(
+        select(func.count()).select_from(UserProjectData).where(UserProjectData.watched.is_(True))
+    )
+    rating_count = session.scalar(
+        select(func.count()).select_from(UserProjectData).where(UserProjectData.rating.is_not(None))
+    )
+    return (watched_count or 0) >= 50 and (rating_count or 0) == 0
+
+
+def _hidden_social_circle(session) -> bool:
+    """"Watched with" filled in on 10 or more distinct watch entries."""
+    count = session.scalar(
+        select(func.count()).select_from(WatchHistoryEntry).where(
+            WatchHistoryEntry.watched_with.is_not(None), WatchHistoryEntry.watched_with != ""
+        )
+    )
+    return (count or 0) >= 10
+
+
+def _hidden_marathon_runner(session) -> bool:
+    """Every project in some franchise with 4+ members, each one's first
+    watch falling within the same 7-calendar-day window -- a genuine
+    binge, not just "eventually finished the franchise.\""""
+    franchises = session.scalars(select(Franchise)).all()
+    for franchise in franchises:
+        members = session.scalars(
+            select(Project).where(Project.franchise_id == franchise.id)
+        ).all()
+        if len(members) < 4:
+            continue
+
+        first_watches = []
+        for project in members:
+            earliest = session.scalar(
+                select(func.min(WatchHistoryEntry.watched_at)).where(
+                    WatchHistoryEntry.project_id == project.id
+                )
+            )
+            if earliest is None:
+                break
+            first_watches.append(earliest)
+        else:
+            if max(first_watches) - min(first_watches) <= timedelta(days=7):
+                return True
+    return False
+
+
+def _hidden_answer_to_everything(session) -> bool:
+    """A Collection containing exactly 42 projects."""
+    counts = session.execute(
+        select(CollectionProject.collection_id, func.count())
+        .group_by(CollectionProject.collection_id)
+    ).all()
+    return any(count == 42 for _collection_id, count in counts)
+
+
+def _hidden_renaissance_fan(session) -> bool:
+    """At least one watched project from every single Universe in the
+    catalog -- MCU, Fox's X-Men, SpiderVerse, and everything else, not
+    just deep in one corner of it."""
+    total_universes = session.scalar(select(func.count()).select_from(Universe))
+    if not total_universes:
+        return False
+    watched_universe_count = session.scalar(
+        select(func.count(func.distinct(Project.universe_id)))
+        .select_from(Project)
+        .join(UserProjectData, UserProjectData.project_id == Project.id)
+        .where(UserProjectData.watched.is_(True), Project.universe_id.is_not(None))
+    )
+    return (watched_universe_count or 0) >= total_universes
+
+
+def _hidden_full_circle(session) -> bool:
+    """Watched both the single oldest and single newest dated release in
+    the entire catalog."""
+    oldest = session.scalar(
+        select(Project.id).where(Project.release_date.is_not(None)).order_by(Project.release_date.asc())
+    )
+    newest = session.scalar(
+        select(Project.id).where(Project.release_date.is_not(None)).order_by(Project.release_date.desc())
+    )
+    if oldest is None or newest is None or oldest == newest:
+        return False
+    watched_ids = {
+        row[0]
+        for row in session.execute(
+            select(UserProjectData.project_id).where(
+                UserProjectData.project_id.in_([oldest, newest]), UserProjectData.watched.is_(True)
+            )
+        )
+    }
+    return oldest in watched_ids and newest in watched_ids
+
+
+# Dispatch table for HIDDEN_SPECIAL achievements -- keyed by the
+# Achievement's own `key`, since these are bespoke one-off checks rather
+# than a generic, parameterized criteria type.
+_HIDDEN_ACHIEVEMENT_CHECKS = {
+    "hidden_perfect_order": _hidden_perfect_order,
+    "hidden_deja_vu": _hidden_deja_vu,
+    "hidden_right_on_time": _hidden_right_on_time,
+    "hidden_triple_feature": _hidden_triple_feature,
+    "hidden_quiet_completionist": _hidden_quiet_completionist,
+    "hidden_social_circle": _hidden_social_circle,
+    "hidden_marathon_runner": _hidden_marathon_runner,
+    "hidden_answer_to_everything": _hidden_answer_to_everything,
+    "hidden_renaissance_fan": _hidden_renaissance_fan,
+    "hidden_full_circle": _hidden_full_circle,
+}
+
+
+def _evaluate_hidden_special(session, achievement_key: str) -> int:
+    """100 if the named hidden achievement's bespoke condition is met,
+    0 otherwise -- an unrecognized key (shouldn't happen with real seed
+    data) logs a warning and is treated as not-yet-met rather than
+    raising, same defensive posture as an unhandled criteria_type."""
+    check = _HIDDEN_ACHIEVEMENT_CHECKS.get(achievement_key)
+    if check is None:
+        logger.warning("No hidden-achievement check registered for key=%s", achievement_key)
+        return 0
+    return 100 if check(session) else 0
+
+
 def sync_achievements() -> tuple[tuple[AchievementStatus, ...], tuple[str, ...]]:
     """Recompute progress for every achievement and unlock any that have
     newly crossed their threshold, in one session.
@@ -271,6 +460,8 @@ def sync_achievements() -> tuple[tuple[AchievementStatus, ...], tuple[str, ...]]
                 progress = collection_percents.get(achievement.criteria_reference or "", 0)
             elif criteria_type == AchievementCriteriaType.ALL_ACHIEVEMENTS_COMPLETE:
                 progress = _all_achievements_percent(session, achievement.id)
+            elif criteria_type == AchievementCriteriaType.HIDDEN_SPECIAL:
+                progress = _evaluate_hidden_special(session, achievement.key)
             elif criteria_type in _UNSUPPORTED_CRITERIA:
                 progress = row.progress_current
             else:  # pragma: no cover - defensive; every real enum value is handled above
@@ -298,17 +489,23 @@ def sync_achievements() -> tuple[tuple[AchievementStatus, ...], tuple[str, ...]]
                     row.unlocked_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     newly_unlocked.append(achievement.name)
 
+            is_locked_and_hidden = achievement.is_hidden and row.unlocked_at is None
             statuses.append(
                 AchievementStatus(
                     key=achievement.key,
-                    name=achievement.name,
-                    description=achievement.description,
-                    icon=achievement.icon,
+                    name="???" if is_locked_and_hidden else achievement.name,
+                    description=(
+                        "A hidden achievement -- keep playing to discover how to unlock it."
+                        if is_locked_and_hidden
+                        else achievement.description
+                    ),
+                    icon="mystery" if is_locked_and_hidden else achievement.icon,
                     tier=achievement.tier,
                     criteria_type=criteria_type,
                     criteria_value=achievement.criteria_value,
                     progress_current=row.progress_current,
                     unlocked_at=row.unlocked_at,
+                    is_hidden=achievement.is_hidden,
                 )
             )
 
