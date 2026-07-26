@@ -23,6 +23,15 @@ block_cipher = None
 SPEC_DIR = Path(SPECPATH)
 PROJECT_ROOT = SPEC_DIR.parent
 
+# Pull APP_VERSION from version.py itself rather than hardcoding a
+# second copy here -- a hardcoded duplicate is exactly the kind of
+# thing that quietly drifts out of sync after a few releases.
+sys.path.insert(0, str(PROJECT_ROOT))
+import version as _version_module
+
+_version_parts = (_version_module.APP_VERSION.split(".") + ["0", "0", "0", "0"])[:4]
+_version_tuple = tuple(int(part) for part in _version_parts)
+
 added_files = [
     (str(PROJECT_ROOT / "themes"), "themes"),
     (str(PROJECT_ROOT / "database" / "migrations"), "database/migrations"),
@@ -68,6 +77,49 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# Windows version resource -- without this, Explorer's Properties dialog
+# shows every field (File description, File version, Product name,
+# Copyright, ...) completely blank. VSVersionInfo/FixedFileInfo/etc. are
+# provided automatically in a .spec file's execution context by
+# PyInstaller itself on Windows, the same way Analysis/PYZ/EXE are -- no
+# import needed. Guarded behind the platform check entirely (not just
+# the final version= parameter below) since these helper names may not
+# even exist in a non-Windows PyInstaller's spec-execution namespace.
+_version_info = None
+if sys.platform == "win32":
+    _version_info = VSVersionInfo(
+        ffi=FixedFileInfo(
+            filevers=_version_tuple,
+            prodvers=_version_tuple,
+            mask=0x3F,
+            flags=0x0,
+            OS=0x40004,
+            fileType=0x1,
+            subtype=0x0,
+            date=(0, 0),
+        ),
+        kids=[
+            StringFileInfo(
+                [
+                    StringTable(
+                        "040904B0",
+                        [
+                            StringStruct("CompanyName", "Dehmahk"),
+                            StringStruct("FileDescription", "MarvelVerse Tracker"),
+                            StringStruct("FileVersion", _version_module.APP_VERSION),
+                            StringStruct("InternalName", "MarvelVerseTracker"),
+                            StringStruct("LegalCopyright", "Copyright (c) Dehmahk"),
+                            StringStruct("OriginalFilename", "MarvelVerseTracker.exe"),
+                            StringStruct("ProductName", "MarvelVerse Tracker"),
+                            StringStruct("ProductVersion", _version_module.APP_VERSION),
+                        ],
+                    )
+                ]
+            ),
+            VarFileInfo([VarStruct("Translation", [1033, 1200])]),
+        ],
+    )
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -98,4 +150,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=str(PROJECT_ROOT / "packaging" / "assets" / "icon.ico") if sys.platform == "win32" else None,
+    version=_version_info,
 )
