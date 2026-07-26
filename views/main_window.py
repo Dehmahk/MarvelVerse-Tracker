@@ -434,13 +434,19 @@ class MainWindow(QMainWindow):
     def show_update_prompt(self, version: str, release_notes: str) -> bool:
         """A modal popup shown once, right when a startup update check
         finds a newer version -- unlike the Settings page's own
-        "Download & Install Update" button (still there either way, for
-        anyone who dismisses this), this surfaces it immediately rather
-        than only for someone who happens to open Settings later.
-        Returns True for "Update Now", False for "Update Later" (which
+        "Download Update" button (still there either way, for anyone
+        who dismisses this), this surfaces it immediately rather than
+        only for someone who happens to open Settings later.
+        Returns True for "Download Now", False for "Later" (which
         includes closing the dialog via the X button -- QMessageBox
         reports that the same as clicking whichever button isn't the
-        default, so this treats it the same as an explicit "later")."""
+        default, so this treats it the same as an explicit "later").
+
+        Note this only downloads the new version to the user's
+        Downloads folder -- it does not replace the running app or
+        relaunch automatically. See
+        controllers.application_controller._on_install_update_requested
+        for why."""
         box = QMessageBox(self)
         box.setWindowTitle("Update Available")
         text = f"MarvelVerse Tracker {version} is available."
@@ -453,8 +459,8 @@ class MainWindow(QMainWindow):
             snippet = release_notes if len(release_notes) <= 280 else release_notes[:277] + "…"
             text += f"\n\n{snippet}"
         box.setText(text)
-        update_now_button = box.addButton("Update Now", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("Update Later", QMessageBox.ButtonRole.RejectRole)
+        update_now_button = box.addButton("Download Now", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Later", QMessageBox.ButtonRole.RejectRole)
         box.setDefaultButton(update_now_button)
         box.exec()
         return box.clickedButton() is update_now_button

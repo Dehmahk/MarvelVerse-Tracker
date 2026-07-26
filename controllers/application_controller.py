@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import logging
-import sys
-import tempfile
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -244,8 +242,7 @@ class ApplicationController:
                 self.main_window.settings_view.set_no_update_available()
             return
 
-        can_install = bool(getattr(sys, "frozen", False))
-        self.main_window.settings_view.show_update_available(info, can_install=can_install)
+        self.main_window.settings_view.show_update_available(info)
 
         if manual:
             return
@@ -254,16 +251,6 @@ class ApplicationController:
         # a manual "Check for Updates" click already got its answer via
         # the Settings panel just above, and doesn't need a popup on top
         # of an action the user just explicitly took.
-        if not can_install:
-            # Running from source: still worth a status message (there's
-            # nothing to "Update Now" into, so no popup -- `git pull` is
-            # the actual next step, and a modal with a non-functional
-            # button would just be confusing).
-            self.main_window.show_status_message(
-                f"MarvelVerse Tracker {info.version} is available -- see Settings to update."
-            )
-            return
-
         if self._update_prompt_shown:
             return
         self._update_prompt_shown = True
@@ -291,26 +278,27 @@ class ApplicationController:
 
     def _on_install_update_requested(self) -> None:
         """Downloads the update whose availability was already reported
-        by the last check (see _latest_update_info) and, once
-        downloaded, replaces the running executable and relaunches --
-        only possible for a packaged .exe (see
-        services.update_service.apply_update_and_restart); the Settings
-        page never shows the button that triggers this signal at all
-        when running from source, but this guards against it too in
-        case that ever drifts."""
+        by the last check (see _latest_update_info) to the user's
+        Downloads folder, with a versioned filename -- it's then up to
+        them to close this app and run the new file themselves. This
+        app deliberately does not try to replace its own running
+        executable and relaunch automatically: that requires a fragile
+        chain of self-replace tricks on Windows (this process exits,
+        a detached script waits for the file lock to release, copies
+        the new file over the old one, then relaunches it) that proved
+        unreliable in practice -- manual, but actually reliable, beats
+        automatic and broken.
+        """
         if self.main_window is None or self._latest_update_info is None:
-            return
-        if not getattr(sys, "frozen", False):
-            self.main_window.settings_view.set_update_install_failed(
-                "Running from source -- use `git pull` to update instead."
-            )
             return
         if self._update_download_thread is not None:
             return
 
         from controllers.update_download_worker import UpdateDownloadWorker
+        from services.update_service import default_download_directory
 
-        destination = Path(tempfile.gettempdir()) / "MarvelVerseTracker-update.exe"
+        version = self._latest_update_info.version
+        destination = default_download_directory() / f"MarvelVerseTracker-v{version}.exe"
         self.main_window.settings_view.set_update_install_in_progress("Downloading update…")
 
         worker = UpdateDownloadWorker(self._latest_update_info, destination, self.app)
@@ -324,27 +312,13 @@ class ApplicationController:
         self._update_download_thread = None
 
     def _on_update_download_succeeded(self, path) -> None:
-        """The new .exe finished downloading -- hand off to
-        apply_update_and_restart() (which arranges for this process to
-        be replaced and relaunched once it exits) and then actually
-        quit, since that function only sets the replacement in motion;
-        it's this caller's job to make way for it."""
+        """The new .exe finished downloading to path -- tell the user
+        where it landed and let them take it from here (close this app,
+        run the new one) rather than trying to replace/relaunch this
+        process automatically."""
         if self.main_window is None:
             return
-
-        from services.update_service import apply_update_and_restart
-
-        try:
-            apply_update_and_restart(path)
-        except Exception:
-            logger.exception("Failed to apply update")
-            self.main_window.settings_view.set_update_install_failed(
-                "Couldn't apply the update -- check logs. "
-                "You can also download it yourself from the GitHub Releases page."
-            )
-            return
-
-        self.app.quit()
+        self.main_window.settings_view.set_update_downloaded(path)
 
     def _on_update_download_failed(self, message: str) -> None:
         if self.main_window is None:

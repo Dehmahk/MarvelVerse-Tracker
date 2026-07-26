@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 import re
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +37,7 @@ class UpdateInfo:
     download_url: str
     release_notes: str
     release_url: str
+    expected_size_bytes: int | None
 
 
 def _parse_version(text: str) -> tuple[int, ...]:
@@ -98,6 +98,7 @@ def check_for_update(
         download_url=asset["browser_download_url"],
         release_notes=(payload.get("body") or "").strip(),
         release_url=payload.get("html_url", ""),
+        expected_size_bytes=asset.get("size"),
     )
 
 
@@ -106,7 +107,17 @@ def download_update(info: UpdateInfo, destination: Path) -> Path:
     check_for_update(), this raises on failure -- by the time this is
     called, the user has already seen an "Update available" prompt and
     clicked "Download & Install", so a failure here needs to actually
-    reach them, not disappear silently."""
+    reach them, not disappear silently.
+
+    Verifies the downloaded file's size against what GitHub itself
+    reported for this asset before returning -- a network hiccup that
+    truncates the download partway through can otherwise produce a
+    file that looks superficially fine (it exists, it's non-empty) but
+    is actually a broken executable, which wouldn't surface as an error
+    here at all -- it would surface later as a mysterious crash on
+    relaunch, after the original executable has already been
+    overwritten and is gone.
+    """
     destination.parent.mkdir(parents=True, exist_ok=True)
     with requests.get(info.download_url, stream=True, timeout=_DOWNLOAD_TIMEOUT_SECONDS) as response:
         response.raise_for_status()
@@ -114,60 +125,28 @@ def download_update(info: UpdateInfo, destination: Path) -> Path:
             for chunk in response.iter_content(chunk_size=256 * 1024):
                 if chunk:
                     f.write(chunk)
+
+    if info.expected_size_bytes is not None:
+        actual_size = destination.stat().st_size
+        if actual_size != info.expected_size_bytes:
+            destination.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"Downloaded file size ({actual_size:,} bytes) doesn't match the expected "
+                f"size ({info.expected_size_bytes:,} bytes) -- the download was likely "
+                "interrupted or corrupted. Try again, or download the update manually "
+                "from the GitHub Releases page."
+            )
+
     return destination
 
 
-def apply_update_and_restart(new_exe_path: Path) -> None:
-    """Arranges for the running executable to be replaced by
-    `new_exe_path` and relaunched, then returns -- the caller is
-    responsible for quitting the application immediately afterward
-    (e.g. QApplication.quit()); this function does not exit the process
-    itself, since owning the app's shutdown sequence isn't this
-    service's job.
-
-    Windows-only, and only meaningful for a frozen (PyInstaller) build --
-    raises RuntimeError otherwise. Windows won't let a running process
-    overwrite its own .exe file while it's still executing, so this
-    writes a small batch script that retries copying the new file over
-    the old one once a second for up to 15 seconds (comfortably long
-    enough for this process to actually exit and release the file
-    handle), then relaunches the result and deletes both the downloaded
-    copy and itself. That script is launched fully detached
-    (DETACHED_PROCESS) so it keeps running after this process exits.
-    """
-    if sys.platform != "win32":
-        raise RuntimeError("Auto-update's replace-and-restart step is Windows-only.")
-    if not getattr(sys, "frozen", False):
-        raise RuntimeError(
-            "Auto-update only applies to a packaged .exe -- running from source, "
-            "use `git pull` instead."
-        )
-
-    import subprocess
-    import tempfile
-
-    current_exe = Path(sys.executable)
-    script_path = Path(tempfile.gettempdir()) / "marvelversetracker_update.bat"
-    script_path.write_text(
-        "@echo off\r\n"
-        "setlocal enabledelayedexpansion\r\n"
-        "set RETRIES=0\r\n"
-        ":retry\r\n"
-        f'copy /y "{new_exe_path}" "{current_exe}" >nul 2>&1\r\n'
-        "if errorlevel 1 (\r\n"
-        "    set /a RETRIES+=1\r\n"
-        "    if !RETRIES! geq 15 exit /b 1\r\n"
-        "    timeout /t 1 /nobreak >nul\r\n"
-        "    goto retry\r\n"
-        ")\r\n"
-        f'start "" "{current_exe}"\r\n'
-        f'del "{new_exe_path}" >nul 2>&1\r\n'
-        'del "%~f0"\r\n',
-        encoding="utf-8",
-    )
-
-    subprocess.Popen(
-        ["cmd", "/c", str(script_path)],
-        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-        close_fds=True,
-    )
+def default_download_directory() -> Path:
+    """Where a downloaded update lands -- the user's own Downloads
+    folder, so it's somewhere they'd actually look for it, alongside
+    anything else they've downloaded. Falls back to the home directory
+    itself if a "Downloads" folder doesn't exist for some reason (some
+    non-standard setups), rather than failing outright."""
+    downloads = Path.home() / "Downloads"
+    if downloads.is_dir():
+        return downloads
+    return Path.home()

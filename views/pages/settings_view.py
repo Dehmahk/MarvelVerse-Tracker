@@ -193,6 +193,7 @@ class SettingsView(QWidget):
         super().__init__()
         self.config = config
         self._saga_options: list[str] = []
+        self._downloaded_update_path: str | None = None
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(32, 28, 32, 20)
@@ -301,11 +302,17 @@ class SettingsView(QWidget):
         self.check_updates_button.clicked.connect(self.check_for_updates_requested.emit)
         button_row.addWidget(self.check_updates_button)
 
-        self.download_install_button = QPushButton("Download && Install Update")
+        self.download_install_button = QPushButton("Download Update")
         self.download_install_button.setObjectName("primaryButton")
         self.download_install_button.clicked.connect(self.install_update_requested.emit)
         self.download_install_button.hide()
         button_row.addWidget(self.download_install_button)
+
+        self.open_download_folder_button = QPushButton("Open Download Folder")
+        self.open_download_folder_button.setObjectName("secondaryButton")
+        self.open_download_folder_button.clicked.connect(self._on_open_download_folder_clicked)
+        self.open_download_folder_button.hide()
+        button_row.addWidget(self.open_download_folder_button)
 
         button_row.addStretch()
         panel_layout.addLayout(button_row)
@@ -1744,20 +1751,17 @@ class SettingsView(QWidget):
     def set_no_update_available(self) -> None:
         self.update_status_label.setText("You're on the latest version.")
         self.download_install_button.hide()
+        self.open_download_folder_button.hide()
         self.update_release_notes_label.hide()
 
     def set_update_check_failed(self, message: str) -> None:
         self.update_status_label.setText(message)
         self.download_install_button.hide()
+        self.open_download_folder_button.hide()
         self.update_release_notes_label.hide()
 
-    def show_update_available(self, info, *, can_install: bool) -> None:
-        """`info` is a duck-typed services.update_service.UpdateInfo.
-        `can_install` reflects whether this is a packaged .exe (where
-        apply_update_and_restart() actually applies) -- running from
-        source, there's a newer version to know about but nothing this
-        view can install, so it points at `git pull` instead of showing
-        a button that would just fail."""
+    def show_update_available(self, info) -> None:
+        """`info` is a duck-typed services.update_service.UpdateInfo."""
         self.update_status_label.setText(f"Version {info.version} is available.")
         if info.release_notes:
             self.update_release_notes_label.setText(info.release_notes)
@@ -1765,12 +1769,10 @@ class SettingsView(QWidget):
         else:
             self.update_release_notes_label.hide()
 
-        if can_install:
-            self.download_install_button.setText("Download && Install Update")
-            self.download_install_button.setEnabled(True)
-            self.download_install_button.show()
-        else:
-            self.download_install_button.hide()
+        self.download_install_button.setText("Download Update")
+        self.download_install_button.setEnabled(True)
+        self.download_install_button.show()
+        self.open_download_folder_button.hide()
 
     def set_update_install_in_progress(self, message: str) -> None:
         self.download_install_button.setEnabled(False)
@@ -1779,3 +1781,32 @@ class SettingsView(QWidget):
     def set_update_install_failed(self, message: str) -> None:
         self.download_install_button.setEnabled(True)
         self.update_status_label.setText(message)
+
+    def set_update_downloaded(self, path) -> None:
+        """The new .exe finished downloading to `path` -- this app
+        doesn't try to replace itself and relaunch automatically (see
+        controllers.application_controller._on_install_update_requested
+        for why), so this just tells the user where it landed and gives
+        them a one-click way to get there themselves."""
+        from pathlib import Path
+
+        path = Path(path)
+        self._downloaded_update_path = str(path)
+        self.update_status_label.setText(
+            f'Downloaded to {path.parent}. Close MarvelVerse Tracker, then run "{path.name}" '
+            "to switch to the new version."
+        )
+        self.download_install_button.hide()
+        self.open_download_folder_button.show()
+
+    def _on_open_download_folder_clicked(self) -> None:
+        if self._downloaded_update_path is None:
+            return
+
+        from pathlib import Path
+
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        folder = Path(self._downloaded_update_path).parent
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
