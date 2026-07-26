@@ -42,6 +42,8 @@ A real month-by-month calendar of every release in your library, past and future
 ### Actor/Director Pages
 Click any cast or crew member's name on a Project Details page to see their bio, photo, and every project of theirs in your library — sorted newest first, cast and crew credits kept separate since they're different kinds of contribution.
 
+![Actor/Director Pages](packaging/assets/Screenshots/ActorDirector_Pages.png)
+
 ### Dashboard
 Your stats at a glance: a completion ring, progress broken down by Universe or by Phase, top genres you actually watch, a 6-month watch-activity chart, an "Up Next" pick based on where you left off in the timeline, the achievement closest to unlocking, a "Coming Soon" strip with release countdowns, an "On This Day" strip surfacing anything that released on today's date in a past year, a daily Marvel trivia fact, Recently Watched, Top Rated By You, and a spotlight on one of your Collections.
 
