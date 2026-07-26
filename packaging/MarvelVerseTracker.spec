@@ -79,14 +79,28 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 # Windows version resource -- without this, Explorer's Properties dialog
 # shows every field (File description, File version, Product name,
-# Copyright, ...) completely blank. VSVersionInfo/FixedFileInfo/etc. are
-# provided automatically in a .spec file's execution context by
-# PyInstaller itself on Windows, the same way Analysis/PYZ/EXE are -- no
-# import needed. Guarded behind the platform check entirely (not just
-# the final version= parameter below) since these helper names may not
-# even exist in a non-Windows PyInstaller's spec-execution namespace.
+# Copyright, ...) completely blank.
+#
+# VSVersionInfo and its related helpers are NOT auto-injected into a
+# .spec file's execution namespace the way Analysis/PYZ/EXE are -- they
+# need to be explicitly imported from
+# PyInstaller.utils.win32.versioninfo. Confirmed the hard way: a real
+# Windows build failed with "NameError: name 'VSVersionInfo' is not
+# defined" without this import. Both the import and the construction
+# below are guarded behind the platform check since this whole module
+# is Windows-only and may not even exist to import on other platforms.
 _version_info = None
 if sys.platform == "win32":
+    from PyInstaller.utils.win32.versioninfo import (
+        FixedFileInfo,
+        StringFileInfo,
+        StringStruct,
+        StringTable,
+        VarFileInfo,
+        VarStruct,
+        VSVersionInfo,
+    )
+
     _version_info = VSVersionInfo(
         ffi=FixedFileInfo(
             filevers=_version_tuple,
