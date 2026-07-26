@@ -36,7 +36,13 @@ added_files = [
     (str(PROJECT_ROOT / "themes"), "themes"),
     (str(PROJECT_ROOT / "database" / "migrations"), "database/migrations"),
     (str(PROJECT_ROOT / "alembic.ini"), "."),
-    (str(PROJECT_ROOT / "packaging" / "assets"), "packaging/assets"),
+    # Only the specific runtime asset files, not the whole
+    # packaging/assets folder -- packaging/assets/screenshots/ holds
+    # README-only documentation images that the running app never
+    # displays, and bundling those into the .exe would just bloat it
+    # for no benefit.
+    (str(PROJECT_ROOT / "packaging" / "assets" / "icon.ico"), "packaging/assets"),
+    (str(PROJECT_ROOT / "packaging" / "assets" / "icon.png"), "packaging/assets"),
     # The actual movie/show catalog -- without this, a packaged .exe had
     # no way to ever get real catalog data into a fresh install; only
     # reference data (universes/franchises/genres/achievements) gets
@@ -44,6 +50,13 @@ added_files = [
     # file. See database/__init__.py's _ensure_catalog_database_exists().
     (str(PROJECT_ROOT / "data" / "marvelverse.db"), "data"),
 ]
+
+# Entirely optional -- the splash screen gracefully skips itself if this
+# file isn't present (see main.py), so the spec shouldn't hard-require
+# it either.
+_splashscreen_path = PROJECT_ROOT / "packaging" / "assets" / "splashscreen.png"
+if _splashscreen_path.exists():
+    added_files.append((str(_splashscreen_path), "packaging/assets"))
 
 a = Analysis(
     [str(PROJECT_ROOT / "main.py")],

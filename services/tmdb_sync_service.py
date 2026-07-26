@@ -93,6 +93,16 @@ class SyncResult:
     tv_updated: int = 0
     people_created: int = 0
     errors: list[str] = field(default_factory=list)
+    # Titles TMDB reported that were skipped rather than added as a new
+    # project, because an existing project with the same title and a
+    # release date in the same year already exists under a *different*
+    # tmdb_id -- see _find_likely_existing_duplicate(). This is a real,
+    # observed TMDB data-quality issue: TMDB itself sometimes carries
+    # more than one listing for what's actually the same real-world
+    # show (e.g. an early, orphaned "cancelled" placeholder entry
+    # alongside the real one), and matching only by tmdb_id has no way
+    # to recognize that on its own.
+    possible_duplicates_skipped: list[str] = field(default_factory=list)
 
     @property
     def total_created(self) -> int:
@@ -106,6 +116,8 @@ class SyncResult:
         if self.total_created == 0 and self.total_updated == 0 and not self.errors:
             return "Nothing to sync."
         parts = [f"{self.total_created} added, {self.total_updated} updated"]
+        if self.possible_duplicates_skipped:
+            parts.append(f"{len(self.possible_duplicates_skipped)} likely duplicate(s) skipped")
         if self.errors:
             parts.append(f"{len(self.errors)} error(s)")
         return ", ".join(parts)
@@ -338,6 +350,38 @@ def _apply_common_fields(
     # see the module docstring.
 
 
+def _find_likely_existing_duplicate(session: Session, title: str, release_date, incoming_tmdb_id: int) -> Project | None:
+    """Looks for an existing project that's very likely the *same
+    real-world thing* as an incoming TMDB result, despite having a
+    different tmdb_id -- TMDB itself sometimes carries more than one
+    listing for the same real show/film (a data-quality issue on their
+    end, not something sync_from_tmdb can prevent at the source), and
+    matching purely by tmdb_id has no way to catch that on its own.
+
+    Deliberately conservative to avoid false positives: only matches
+    when the title is identical (case/whitespace-insensitive) AND both
+    projects have a release date in the same year. Two genuinely
+    different films that happen to share a title but released decades
+    apart (Ghost Rider 2007 vs. a new 2028 film, for instance) must
+    never be caught by this -- only an exact title match in the same
+    year is treated as suspicious enough to skip. If `release_date` is
+    None, this always returns None rather than guessing from title
+    alone, since there's nothing reliable to compare against."""
+    if release_date is None:
+        return None
+
+    normalized_title = title.strip().casefold()
+    candidates = session.scalars(
+        select(Project).where(Project.tmdb_id != incoming_tmdb_id, Project.tmdb_id.is_not(None))
+    ).all()
+    for candidate in candidates:
+        if candidate.title.strip().casefold() != normalized_title:
+            continue
+        if candidate.release_date is not None and candidate.release_date.year == release_date.year:
+            return candidate
+    return None
+
+
 def _sync_movie(
     session: Session, client: TMDBClient, raw_summary: dict, result: SyncResult, people_created: list[int]
 ) -> None:
@@ -358,6 +402,14 @@ def _sync_movie(
     project = session.scalar(select(Project).where(Project.tmdb_id == tmdb_id))
     is_new = project is None
     if is_new:
+        likely_duplicate = _find_likely_existing_duplicate(session, title, release_date, tmdb_id)
+        if likely_duplicate is not None:
+            result.possible_duplicates_skipped.append(
+                f'"{title}" (tmdb_id={tmdb_id}) -- looks like a duplicate of existing '
+                f'"{likely_duplicate.title}" (tmdb_id={likely_duplicate.tmdb_id})'
+            )
+            return
+
         year = release_date.year if release_date else None
         base_slug = _slugify(f"{title}-{year}" if year else title)
         project = Project(
@@ -414,6 +466,14 @@ def _sync_tv(
     project = session.scalar(select(Project).where(Project.tmdb_id == tmdb_id))
     is_new = project is None
     if is_new:
+        likely_duplicate = _find_likely_existing_duplicate(session, title, release_date, tmdb_id)
+        if likely_duplicate is not None:
+            result.possible_duplicates_skipped.append(
+                f'"{title}" (tmdb_id={tmdb_id}) -- looks like a duplicate of existing '
+                f'"{likely_duplicate.title}" (tmdb_id={likely_duplicate.tmdb_id})'
+            )
+            return
+
         year = release_date.year if release_date else None
         base_slug = _slugify(f"{title}-{year}" if year else title)
         project = Project(

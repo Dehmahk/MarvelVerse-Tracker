@@ -23,6 +23,8 @@ Built with Python, [PySide6](https://doc.qt.io/qtforpython/) (Qt for Python), an
 ### Library
 Browse your entire catalog in four view modes — Grid, Poster, List, or Compact — with filters for universe, franchise, genre, type, status, character, and your own Watched / Favorite / Wishlist / Skipped flags. Search by title *or* by cast/crew member name. Sort by title, release date, rating, or runtime. Configurable page size, with A/D or arrow-key page navigation. Hover over a card in Grid or Poster view for a moment to see a larger preview of the poster without leaving the grid.
 
+![Library](packaging/assets/screenshots/Library.png)
+
 **Sort by Marvel Character** — pick a character (Iron Man, Wolverine, Venom, Ghost Rider, and 40+ others) and see every movie or show they actually appear in, regardless of which universe or franchise it's filed under.
 
 ### Universes & Franchises
@@ -30,6 +32,9 @@ The catalog spans well beyond the MCU: the **Marvel Cinematic Universe**, Fox's 
 
 ### Timeline
 The full story in chronological order, not release order — grouped by MCU phase (with collapsible sections, plus one-click Collapse All / Expand All) or as one continuous Chronological Order run (the default view). Filter by universe. Choose which sagas (documentaries, specials, spin-offs) to leave out of the chronological view.
+
+![Timeline - Chronological Order](packaging/assets/screenshots/Timeline_Chronological.png)
+![Timeline - Phase View](packaging/assets/screenshots/Timeline_Phase.png)
 
 ### Calendar
 A real month-by-month calendar of every release in your library, past and future — not just what's coming up next. Jump between months, jump back to today, and click any release to open its Project Details page.
@@ -40,8 +45,12 @@ Click any cast or crew member's name on a Project Details page to see their bio,
 ### Dashboard
 Your stats at a glance: a completion ring, progress broken down by Universe or by Phase, top genres you actually watch, a 6-month watch-activity chart, an "Up Next" pick based on where you left off in the timeline, the achievement closest to unlocking, a "Coming Soon" strip with release countdowns, an "On This Day" strip surfacing anything that released on today's date in a past year, a daily Marvel trivia fact, Recently Watched, Top Rated By You, and a spotlight on one of your Collections.
 
+![Dashboard](packaging/assets/screenshots/Dashboard.png)
+
 ### Project Details
 Full details for any movie or show: synopsis, cast & crew (click a name to see their own page), release date, in-universe timeline date, production start date, runtime, studio, genres, saga/phase, and its position in the chronological timeline (with Previous/Next quick-nav buttons). Log watches and rewatches, rate on a 0–10 scale, jot notes, note who you watched it with, and toggle Favorite / Wishlist / Skipped.
+
+![Project Details](packaging/assets/screenshots/Project_Details.png)
 
 **For TV shows only:** season and episode counts, cancellation/next-season dates where known, and an episode-by-episode tracker — mark individual episodes watched, or mark a whole season at once. (These fields don't show up at all on movies — there's no "Seasons" field cluttering a film's page.)
 
@@ -52,8 +61,12 @@ When TMDB has trailer data for a project, a clickable trailer thumbnail preview 
 ### Achievements
 86 achievements across Bronze, Silver, Gold, Platinum, and Diamond tiers (15 each), plus 10 hidden achievements and a single Marvelous-tier capstone for unlocking everything else. Sort by tier (grouped into clearly separated sections) or by recently earned. Hidden achievements show up as "???" until you actually unlock them — they reward unusual behavior (watching a whole phase in exact release order, a genuine binge-watch, watching on the exact anniversary of a release, and others) without spoiling the trick in advance.
 
+![Achievements](packaging/assets/screenshots/Achievements.png)
+
 ### Collections
 Build your own curated, manually-ordered lists — a rewatch marathon, a personal ranking, whatever you like — separate from the canonical Universe/Franchise groupings.
+
+![Collections](packaging/assets/screenshots/Collections.png)
 
 ### "Surprise Me"
 Can't decide what to watch? One click picks something random from what you haven't watched yet.

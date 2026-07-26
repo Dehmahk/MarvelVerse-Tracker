@@ -93,6 +93,7 @@ class ApplicationController:
         self.main_window.surprise_me_requested.connect(self._on_surprise_me_requested)
         self.main_window.check_for_updates_requested.connect(self._on_check_for_updates_requested)
         self.main_window.run_data_integrity_check_requested.connect(self._on_run_data_integrity_check_requested)
+        self.main_window.clean_up_duplicates_requested.connect(self._on_clean_up_duplicates_requested)
         self.main_window.find_on_tmdb_requested.connect(self._on_find_on_tmdb_requested)
         self.main_window.install_update_requested.connect(self._on_install_update_requested)
         self.main_window.search_changed.connect(self._on_search_changed)
@@ -275,6 +276,25 @@ class ApplicationController:
             return
 
         self.main_window.settings_view.show_data_integrity_results(issues)
+
+    def _on_clean_up_duplicates_requested(self) -> None:
+        if self.main_window is None:
+            return
+
+        from services.duplicate_cleanup_service import clean_up_duplicates
+
+        try:
+            removed, needs_review = clean_up_duplicates()
+        except Exception:
+            logger.exception("Duplicate cleanup failed")
+            self.main_window.show_status_message("Duplicate cleanup failed -- check logs")
+            return
+
+        self.main_window.settings_view.show_duplicate_cleanup_results(removed, needs_review)
+        if removed:
+            self._refresh_library_page()
+            self._refresh_library_summary()
+            self._refresh_dashboard_stats()
 
     def _on_install_update_requested(self) -> None:
         """Downloads the update whose availability was already reported

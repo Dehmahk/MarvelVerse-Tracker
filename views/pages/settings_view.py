@@ -187,6 +187,7 @@ class SettingsView(QWidget):
     preferences_changed = Signal()
     check_for_updates_requested = Signal()
     run_data_integrity_check_requested = Signal()
+    clean_up_duplicates_requested = Signal()
     install_update_requested = Signal()
 
     def __init__(self, config: AppConfig) -> None:
@@ -727,6 +728,18 @@ class SettingsView(QWidget):
         )
         self.run_integrity_check_button.clicked.connect(self._on_run_integrity_check_clicked)
         button_row.addWidget(self.run_integrity_check_button)
+
+        self.clean_up_duplicates_button = QPushButton("Clean Up Duplicate Projects")
+        self.clean_up_duplicates_button.setObjectName("secondaryButton")
+        self.clean_up_duplicates_button.setToolTip(
+            "Removes duplicate projects (same title, same release year, "
+            "different TMDB entry -- a known TMDB data-quality issue) that "
+            "have no watch history, rating, notes, or other personal data "
+            "on them. Anything with personal data attached is left "
+            "completely untouched and listed for you to review yourself."
+        )
+        self.clean_up_duplicates_button.clicked.connect(self._on_clean_up_duplicates_clicked)
+        button_row.addWidget(self.clean_up_duplicates_button)
 
         button_row.addStretch()
         panel_layout.addLayout(button_row)
@@ -1440,6 +1453,21 @@ class SettingsView(QWidget):
     def _on_run_integrity_check_clicked(self) -> None:
         self.run_data_integrity_check_requested.emit()
 
+    def _on_clean_up_duplicates_clicked(self) -> None:
+        confirmed = QMessageBox.question(
+            self,
+            "Clean Up Duplicate Projects",
+            "Remove duplicate projects that have no watch history, rating, "
+            "notes, or other personal data on them?\n\n"
+            "Anything with personal data attached is never touched by this "
+            "-- it's listed separately afterward for you to review yourself.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if confirmed != QMessageBox.StandardButton.Yes:
+            return
+        self.clean_up_duplicates_requested.emit()
+
     def _on_clear_cache_clicked(self) -> None:
         removed = image_loader.clear_cache()
         self.storage_status_label.setText(
@@ -1747,6 +1775,33 @@ class SettingsView(QWidget):
 
         dialog = DataIntegrityDialog(issues, self)
         dialog.exec()
+
+    def show_duplicate_cleanup_results(self, removed, needs_review) -> None:
+        box = QMessageBox(self)
+        box.setWindowTitle("Duplicate Cleanup Results")
+        box.setIcon(QMessageBox.Icon.Information)
+
+        if not removed and not needs_review:
+            box.setText("No likely duplicates found.")
+        else:
+            summary_lines = []
+            if removed:
+                summary_lines.append(f"Removed {len(removed)} duplicate(s) with no personal data.")
+            if needs_review:
+                summary_lines.append(
+                    f"{len(needs_review)} likely duplicate(s) have personal data on them and were "
+                    "left untouched -- see details below."
+                )
+            box.setText("\n".join(summary_lines))
+
+            details = []
+            if removed:
+                details.append("Removed:\n" + "\n".join(f"  - {line}" for line in removed))
+            if needs_review:
+                details.append("Needs manual review:\n" + "\n".join(f"  - {line}" for line in needs_review))
+            box.setDetailedText("\n\n".join(details))
+
+        box.exec()
 
     def set_no_update_available(self) -> None:
         self.update_status_label.setText("You're on the latest version.")
