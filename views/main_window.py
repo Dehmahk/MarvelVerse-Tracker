@@ -112,6 +112,8 @@ class MainWindow(QMainWindow):
     def __init__(self, config: AppConfig) -> None:
         super().__init__()
 
+        self._apply_own_window_icon()
+
         self.config = config
         self._animations_enabled = config.animations_enabled
         self._page_transition_animation = None
@@ -468,6 +470,26 @@ class MainWindow(QMainWindow):
 
     def show_status_message(self, message: str, timeout_ms: int = 4000) -> None:
         self.statusBar().showMessage(message, timeout_ms)
+
+    def _apply_own_window_icon(self) -> None:
+        """Sets this window's own icon directly, rather than relying
+        solely on inheriting QApplication's app-wide default (set in
+        main.py) -- Qt/Windows are generally supposed to propagate that
+        default to every top-level window's title bar *and* its taskbar
+        button alike, but in practice the taskbar-while-running icon
+        specifically has shown up as a generic default even when the
+        title bar (same inherited default) displayed correctly, and
+        even when the .exe file's own embedded icon resource is
+        genuinely correct (confirmed separately via a pinned taskbar
+        shortcut, which reads the file's icon directly rather than the
+        running window's). Setting it directly here, as early as
+        possible, removes any reliance on that inheritance actually
+        applying in time for the taskbar specifically to pick it up."""
+        icon_path = resource_root() / "packaging" / "assets" / "icon.ico"
+        if not icon_path.exists():
+            icon_path = resource_root() / "packaging" / "assets" / "icon.png"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
 
     def show_native_notification(self, title: str, message: str) -> None:
         """A real OS-level desktop notification (via the system tray),

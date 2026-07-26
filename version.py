@@ -14,7 +14,7 @@ as an available update no matter how far ahead of it the actual code is.
 """
 from __future__ import annotations
 
-APP_VERSION = "1.2.4"
+APP_VERSION = "1.2.5"
 # When APP_VERSION above was last bumped -- shown in the About section
 # alongside the version number itself. Update both together.
 APP_VERSION_DATE = "2026-07-26"
