@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QApplication, QSplashScreen
 
 from controllers.application_controller import ApplicationController
@@ -19,6 +19,31 @@ from views.widgets.tmdb_onboarding_dialog import TMDBOnboardingDialog
 # a packaged .exe; running from source, resource_root() just resolves to
 # the project root directly.
 SPLASH_IMAGE_PATH = resource_root() / "packaging" / "assets" / "splashscreen.png"
+
+# Prefer the .ico on Windows -- it embeds several resolutions (16x16 up
+# through 256x256) so Windows can pick the right size for the taskbar,
+# title bar, and Alt-Tab switcher without upscaling a single fixed-size
+# image. Falls back to the .png (used elsewhere for the tray icon
+# anyway) on platforms/setups where the .ico isn't present.
+_ICON_ICO_PATH = resource_root() / "packaging" / "assets" / "icon.ico"
+_ICON_PNG_PATH = resource_root() / "packaging" / "assets" / "icon.png"
+
+
+def _resolve_app_icon() -> QIcon | None:
+    """The icon shown in the taskbar, title bar, and Alt-Tab switcher
+    while the app is running -- entirely separate from the .exe file's
+    own icon (that one's set at build time via
+    packaging/MarvelVerseTracker.spec's icon= parameter, and only
+    affects what Explorer shows for the file itself, not what Windows
+    shows for the running window). Returns None if neither icon file
+    exists, in which case Qt just falls back to its own default --
+    same "missing asset degrades gracefully" approach as the splash
+    screen above."""
+    if _ICON_ICO_PATH.exists():
+        return QIcon(str(_ICON_ICO_PATH))
+    if _ICON_PNG_PATH.exists():
+        return QIcon(str(_ICON_PNG_PATH))
+    return None
 
 
 def _maybe_show_tmdb_onboarding(controller: ApplicationController) -> None:
@@ -58,6 +83,10 @@ def main() -> int:
     app.setApplicationDisplayName(config.application_name)
     app.setOrganizationName("MarvelVerseTracker")
     apply_font_scale(app, config.font_scale)
+
+    app_icon = _resolve_app_icon()
+    if app_icon is not None:
+        app.setWindowIcon(app_icon)
 
     # Entirely optional -- if splashscreen.png isn't there (e.g. a fresh
     # clone before it's been added), the app just starts normally with no
