@@ -28,6 +28,12 @@ added_files = [
     (str(PROJECT_ROOT / "database" / "migrations"), "database/migrations"),
     (str(PROJECT_ROOT / "alembic.ini"), "."),
     (str(PROJECT_ROOT / "packaging" / "assets"), "packaging/assets"),
+    # The actual movie/show catalog -- without this, a packaged .exe had
+    # no way to ever get real catalog data into a fresh install; only
+    # reference data (universes/franchises/genres/achievements) gets
+    # seeded by code, the catalog itself has always lived in this one
+    # file. See database/__init__.py's _ensure_catalog_database_exists().
+    (str(PROJECT_ROOT / "data" / "marvelverse.db"), "data"),
 ]
 
 a = Analysis(

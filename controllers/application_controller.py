@@ -1552,7 +1552,7 @@ class ApplicationController:
         from database import init_database
 
         try:
-            init_database(self.config.database_file)
+            init_database(self.config.database_file, copy_bundled_catalog=True)
         except Exception:
             logger.exception("Failed to initialize the database")
             QMessageBox.critical(
