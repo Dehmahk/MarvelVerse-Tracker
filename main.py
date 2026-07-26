@@ -28,6 +28,37 @@ SPLASH_IMAGE_PATH = resource_root() / "packaging" / "assets" / "splashscreen.png
 _ICON_ICO_PATH = resource_root() / "packaging" / "assets" / "icon.ico"
 _ICON_PNG_PATH = resource_root() / "packaging" / "assets" / "icon.png"
 
+# A unique-enough identifier so Windows treats this as its own distinct
+# application rather than grouping/falling back to whatever generic
+# icon it associates with the interpreter (or PyInstaller bootloader)
+# that's actually running the process underneath.
+_WINDOWS_APP_USER_MODEL_ID = "Dehmahk.MarvelVerseTracker"
+
+
+def _set_windows_app_user_model_id() -> None:
+    """Without this, Windows can show the correct icon in the title bar
+    (that one comes straight from QApplication.setWindowIcon()) while
+    still showing some other icon in the taskbar -- a well-documented
+    quirk for Python/PyInstaller GUI apps specifically, since Windows
+    identifies "which application is this really" for taskbar grouping
+    and icon purposes via an "AppUserModelID", and without one
+    explicitly set, it falls back to identifying the process by its
+    underlying interpreter/bootloader rather than this app itself.
+    Must be called before any window is shown -- ideally as close to
+    the very start of the process as possible. A no-op (and safe to
+    call) on any platform other than Windows."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(_WINDOWS_APP_USER_MODEL_ID)
+    except (AttributeError, OSError):
+        # Best-effort -- an older/unusual Windows setup without this
+        # shell32 function shouldn't prevent the app from starting at
+        # all, it would just mean the taskbar icon quirk isn't fixed.
+        pass
+
 
 def _resolve_app_icon() -> QIcon | None:
     """The icon shown in the taskbar, title bar, and Alt-Tab switcher
@@ -75,6 +106,8 @@ def _maybe_show_tmdb_onboarding(controller: ApplicationController) -> None:
 
 
 def main() -> int:
+    _set_windows_app_user_model_id()
+
     config = AppConfig.load()
     configure_logging(config.log_file)
 
