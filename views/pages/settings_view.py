@@ -302,7 +302,7 @@ class SettingsView(QWidget):
         self.check_updates_button.clicked.connect(self.check_for_updates_requested.emit)
         button_row.addWidget(self.check_updates_button)
 
-        self.download_install_button = QPushButton("Download Update")
+        self.download_install_button = QPushButton("Update Now and Open Download Folder")
         self.download_install_button.setObjectName("primaryButton")
         self.download_install_button.clicked.connect(self.install_update_requested.emit)
         self.download_install_button.hide()
@@ -1769,7 +1769,7 @@ class SettingsView(QWidget):
         else:
             self.update_release_notes_label.hide()
 
-        self.download_install_button.setText("Download Update")
+        self.download_install_button.setText("Update Now and Open Download Folder")
         self.download_install_button.setEnabled(True)
         self.download_install_button.show()
         self.open_download_folder_button.hide()
@@ -1786,8 +1786,12 @@ class SettingsView(QWidget):
         """The new .exe finished downloading to `path` -- this app
         doesn't try to replace itself and relaunch automatically (see
         controllers.application_controller._on_install_update_requested
-        for why), so this just tells the user where it landed and gives
-        them a one-click way to get there themselves."""
+        for why), so this tells the user where it landed and opens that
+        folder for them immediately (matching the "...and Open Download
+        Folder" button they just clicked), rather than making them find
+        and click a second button to get there. The button stays
+        available afterward too, in case that folder window gets
+        closed or they navigate away and want to get back to it."""
         from pathlib import Path
 
         path = Path(path)
@@ -1798,8 +1802,12 @@ class SettingsView(QWidget):
         )
         self.download_install_button.hide()
         self.open_download_folder_button.show()
+        self._open_download_folder()
 
     def _on_open_download_folder_clicked(self) -> None:
+        self._open_download_folder()
+
+    def _open_download_folder(self) -> None:
         if self._downloaded_update_path is None:
             return
 
