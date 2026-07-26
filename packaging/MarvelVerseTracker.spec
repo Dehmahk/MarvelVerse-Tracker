@@ -73,7 +73,14 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    # UPX compression is a well-documented cause of antivirus false
+    # positives on PyInstaller onefile builds -- a compressed/packed
+    # executable looks more suspicious to heuristic scanners, and some
+    # AV products will quarantine a file out of the onefile bootloader's
+    # extracted temp folder *while the app is still running*, which
+    # shows up as exactly this: "Failed to load Python DLL" from
+    # %TEMP%\_MEI#####\pythonXXX.dll, mid-session rather than at launch.
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     # Windows: no console window behind the GUI. Harmless no-op on
