@@ -1,0 +1,1052 @@
+* {
+    font-family: "Segoe UI";
+}
+
+QMainWindow {
+    background: #101114;
+    color: #F2F2F2;
+}
+
+QToolBar#mainToolbar {
+    background: #16181D;
+    border: none;
+    border-bottom: 1px solid #292C33;
+    spacing: 12px;
+    min-height: 64px;
+}
+
+QLabel#toolbarTitle {
+    color: @ACCENT@;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+QFrame#sidebar {
+    background: #15171B;
+    border-right: 1px solid #292C33;
+}
+
+QListWidget#navigation {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #A8ABB3;
+    font-size: 14px;
+}
+
+QListWidget#navigation::item {
+    padding: 14px 14px;
+    border-radius: 8px;
+}
+
+QListWidget#navigation::item:hover {
+    background: #22252C;
+    color: #FFFFFF;
+}
+
+QListWidget#navigation::item:selected {
+    background: @ACCENT@;
+    color: #FFFFFF;
+    font-weight: 600;
+}
+
+QLabel#pageHeading {
+    color: #FFFFFF;
+    font-size: 32px;
+    font-weight: 700;
+}
+
+QLabel#pageSubtitle {
+    color: #858A95;
+    font-size: 14px;
+}
+
+QLabel#sectionHeading {
+    color: #FFFFFF;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+QFrame#statCard,
+QFrame#contentPanel {
+    background: #181A20;
+    border: 1px solid #292C33;
+    border-radius: 12px;
+}
+
+QLabel#statTitle {
+    color: #858A95;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#statValue {
+    color: #FFFFFF;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+QLabel#statSubtitle {
+    color: #686D78;
+    font-size: 12px;
+}
+
+QLabel#statIcon {
+    font-size: 20px;
+}
+
+/* --- Dashboard: Up Next hero card --------------------------------------- */
+
+QFrame#posterHoverPreview {
+    background: #181A20;
+    border: 2px solid @ACCENT@;
+    border-radius: 12px;
+}
+
+QLabel#posterHoverPreviewTitle {
+    color: #D7D9DE;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QFrame#upNextCard {
+    background: #181A20;
+    border: 1px solid @ACCENT@;
+    border-radius: 12px;
+}
+
+QFrame#calendarDayCell {
+    background: #181A20;
+    border: 1px solid #30343D;
+    border-radius: 8px;
+}
+
+QFrame#calendarDayCellToday {
+    background: #181A20;
+    border: 2px solid @ACCENT@;
+    border-radius: 8px;
+}
+
+QLabel#calendarDayNumber {
+    color: #A8ABB3;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#calendarReleaseTitle {
+    color: #D7D9DE;
+    font-size: 11px;
+}
+
+QLabel#calendarMoreLabel {
+    color: #686D78;
+    font-size: 10px;
+}
+
+QLabel#upNextEyebrow {
+    color: @ACCENT@;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#upNextTitle {
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+/* --- Dashboard: "Coming Soon" chips -------------------------------------- */
+
+QFrame#upcomingChip {
+    background: #181A20;
+    border: 1px solid #292C33;
+    border-radius: 10px;
+}
+
+QLabel#upcomingChipTitle {
+    color: #D7D9DE;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#upcomingChipCountdown {
+    color: @ACCENT@;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#emptyState {
+    color: #686D78;
+    font-size: 15px;
+}
+
+QLineEdit#searchBox {
+    background: #181A20;
+    color: #FFFFFF;
+    border: 1px solid #30343D;
+    border-radius: 8px;
+    padding: 11px 14px;
+    font-size: 14px;
+}
+
+QLineEdit#searchBox:focus {
+    border: 1px solid @ACCENT@;
+}
+
+QPushButton {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-weight: 600;
+    /* Explicit fallback text color: this app never sets its own
+       QPalette, so any button whose more-specific #objectName rule
+       doesn't end up applying (for whatever native-style cascading
+       reason -- this is what caused "Save Appearance"/"Reset to
+       Defaults" to render with invisible text) would otherwise fall
+       back to the OS palette's default button text color, which can
+       be black-on-black against this app's dark theme. */
+    color: #D7D9DE;
+}
+
+QPushButton#secondaryButton,
+QPushButton#iconButton {
+    background: #22252C;
+    color: #D7D9DE;
+}
+
+QPushButton#secondaryButton:hover,
+QPushButton#iconButton:hover {
+    background: #30343D;
+}
+
+QPushButton#iconButton {
+    min-width: 40px;
+    max-width: 40px;
+}
+
+QStatusBar {
+    background: #15171B;
+    color: #686D78;
+    border-top: 1px solid #292C33;
+}
+
+QLabel#statusChip {
+    color: #A8ABB3;
+    font-size: 12px;
+    padding: 0 12px;
+    border-left: 1px solid #292C33;
+}
+
+QLabel#statusChipOk {
+    color: #4FC3F7;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0 12px;
+    border-left: 1px solid #292C33;
+}
+
+QLabel#statusChipError {
+    color: #FF9F43;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 0 12px;
+    border-left: 1px solid #292C33;
+}
+
+QLabel#toolbarPageLabel {
+    color: #686D78;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+QSplitter#shellSplitter::handle {
+    background: #292C33;
+}
+
+QSplitter#shellSplitter::handle:hover {
+    background: @ACCENT@;
+}
+
+/* --- Library: filters, sort, view mode -------------------------------- */
+
+QLabel#inlineLabel {
+    color: #858A95;
+    font-size: 13px;
+}
+
+QComboBox#filterCombo {
+    background: #181A20;
+    color: #D7D9DE;
+    border: 1px solid #30343D;
+    border-radius: 8px;
+    padding: 8px 30px 8px 12px;
+    font-size: 13px;
+    min-width: 120px;
+    min-height: 20px;
+    /* Forces Qt to fully custom-paint this combo box (text, box, and
+       popup) instead of letting the native platform style draw parts
+       of it -- without this, some native styles (notably Windows)
+       paint the editable/text area in a different rect than the one
+       this stylesheet sizes, which is what made the box render as a
+       tall, empty, squished pill with no visible text. */
+    combobox-popup: 0;
+}
+
+QComboBox#filterCombo:hover {
+    border: 1px solid #454B57;
+}
+
+QComboBox#filterCombo::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border: none;
+}
+
+QComboBox#filterCombo QAbstractItemView {
+    background: #181A20;
+    color: #D7D9DE;
+    border: 1px solid #30343D;
+    selection-background-color: @ACCENT@;
+    selection-color: #FFFFFF;
+    outline: none;
+}
+
+QPushButton#filterToggle {
+    background: #181A20;
+    color: #A8ABB3;
+    border: 1px solid #30343D;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QPushButton#filterToggle:hover {
+    border: 1px solid #454B57;
+}
+
+QPushButton#filterToggle:checked {
+    background: @ACCENT@;
+    color: #FFFFFF;
+    border: 1px solid @ACCENT@;
+}
+
+QPushButton#iconButton:checked {
+    background: @ACCENT@;
+    color: #FFFFFF;
+}
+
+QScrollArea#libraryScrollArea {
+    background: transparent;
+    border: none;
+}
+
+/* --- Library: Grid / Poster cards --------------------------------------- */
+
+QFrame#projectCard {
+    background: transparent;
+}
+
+QFrame#projectCardPoster {
+    background: #181A20;
+    border: 1px solid #292C33;
+    border-radius: 10px;
+}
+
+QFrame#projectCard:hover QFrame#projectCardPoster {
+    border: 1px solid @ACCENT@;
+}
+
+QLabel#cardPosterPlaceholder {
+    color: #3A3E47;
+    font-size: 36px;
+    font-weight: 800;
+}
+
+QLabel#cardStatusBadge {
+    color: #D7D9DE;
+    background: rgba(16, 17, 20, 0.72);
+    border-radius: 5px;
+    padding: 3px 7px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+QLabel#cardIndicators {
+    color: #F2C94C;
+    background: rgba(16, 17, 20, 0.72);
+    border-radius: 5px;
+    padding: 3px 7px;
+    font-size: 12px;
+}
+
+QLabel#cardTitle {
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 600;
+    padding-top: 8px;
+}
+
+QLabel#cardMeta {
+    color: #858A95;
+    font-size: 11px;
+    padding-top: 2px;
+}
+
+/* --- Library: List / Compact rows --------------------------------------- */
+
+QFrame#projectRow,
+QFrame#projectRowCompact {
+    background: #181A20;
+    border: 1px solid #22252C;
+    border-radius: 8px;
+}
+
+QFrame#projectRow:hover,
+QFrame#projectRowCompact:hover {
+    border: 1px solid @ACCENT@;
+}
+
+QLabel#rowPosterPlaceholder {
+    background: #22252C;
+    color: #686D78;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 11px;
+}
+
+QLabel#rowTitle {
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QLabel#rowTitleCompact {
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QLabel#rowSubtitle {
+    color: #858A95;
+    font-size: 12px;
+}
+
+QLabel#rowGenres {
+    color: #686D78;
+    font-size: 11px;
+}
+
+QLabel#rowStatus {
+    color: #A8ABB3;
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 90px;
+}
+
+QLabel#rowRating {
+    color: #F2C94C;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#rowIndicators {
+    color: #F2C94C;
+    font-size: 13px;
+}
+
+QLabel#rowColumnCompact {
+    color: #858A95;
+    font-size: 12px;
+}
+
+/* --- Project Details ----------------------------------------------------- */
+
+QPushButton#primaryButton {
+    background: @ACCENT@;
+    color: #FFFFFF;
+}
+
+QPushButton#primaryButton:hover {
+    background: @ACCENT_HOVER@;
+}
+
+QPushButton#primaryButton:disabled {
+    background: #3A2426;
+    color: #7A6567;
+}
+
+QScrollArea#detailScrollArea {
+    background: transparent;
+    border: none;
+}
+
+QScrollArea#settingsScrollArea {
+    background: transparent;
+    border: none;
+}
+
+QFrame#detailPoster {
+    background: #181A20;
+    border: 1px solid #292C33;
+    border-radius: 12px;
+}
+
+QLabel#detailPosterPlaceholder {
+    color: #3A3E47;
+    font-size: 54px;
+    font-weight: 800;
+}
+
+QLabel#detailStatusBadge {
+    color: #D7D9DE;
+    background: rgba(16, 17, 20, 0.72);
+    border-radius: 5px;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#detailFactLabel {
+    color: #686D78;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#detailFactValue {
+    color: #D7D9DE;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QLabel#detailSynopsis {
+    color: #C3C6CC;
+    font-size: 14px;
+}
+
+QLabel#factOfTheDayText {
+    color: #C3C6CC;
+    font-size: 14px;
+    font-style: italic;
+}
+
+QLabel#detailNoData {
+    color: #686D78;
+    font-size: 13px;
+    font-style: italic;
+}
+
+QDoubleSpinBox#ratingSpin {
+    background: #181A20;
+    color: #D7D9DE;
+    border: 1px solid #30343D;
+    border-radius: 8px;
+    padding: 6px 20px 6px 10px;
+    font-size: 13px;
+    min-width: 80px;
+}
+
+QDoubleSpinBox#ratingSpin:focus {
+    border: 1px solid @ACCENT@;
+}
+
+QDoubleSpinBox#ratingSpin::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 18px;
+    height: 15px;
+    border-left: 1px solid #30343D;
+    border-top-right-radius: 7px;
+    background: #22252C;
+}
+
+QDoubleSpinBox#ratingSpin::up-button:hover {
+    background: #2A2E37;
+}
+
+QDoubleSpinBox#ratingSpin::up-button:pressed {
+    background: #33373F;
+}
+
+QDoubleSpinBox#ratingSpin::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 18px;
+    height: 15px;
+    border-left: 1px solid #30343D;
+    border-bottom-right-radius: 7px;
+    background: #22252C;
+}
+
+QDoubleSpinBox#ratingSpin::down-button:hover {
+    background: #2A2E37;
+}
+
+QDoubleSpinBox#ratingSpin::down-button:pressed {
+    background: #33373F;
+}
+
+QDoubleSpinBox#ratingSpin::up-arrow {
+    image: none;
+    width: 0px;
+    height: 0px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 5px solid #D7D9DE;
+}
+
+QDoubleSpinBox#ratingSpin::up-arrow:disabled,
+QDoubleSpinBox#ratingSpin::up-arrow:off {
+    border-bottom: 5px solid #4A4E58;
+}
+
+QDoubleSpinBox#ratingSpin::down-arrow {
+    image: none;
+    width: 0px;
+    height: 0px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #D7D9DE;
+}
+
+QDoubleSpinBox#ratingSpin::down-arrow:disabled,
+QDoubleSpinBox#ratingSpin::down-arrow:off {
+    border-top: 5px solid #4A4E58;
+}
+
+QTextEdit#notesEdit {
+    background: #181A20;
+    color: #D7D9DE;
+    border: 1px solid #30343D;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 13px;
+}
+
+QTextEdit#notesEdit:focus {
+    border: 1px solid @ACCENT@;
+}
+
+QLabel#castCrewEntry {
+    color: #C3C6CC;
+    font-size: 13px;
+    padding: 3px 0;
+}
+
+QLabel#watchHistoryEntry {
+    color: #A8ABB3;
+    font-size: 12px;
+    padding: 4px 0;
+    border-bottom: 1px solid #22252C;
+}
+
+/* --- Timeline ------------------------------------------------------------ */
+
+QLabel#timelineGroupHeading {
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 700;
+    padding-bottom: 2px;
+    border-bottom: 1px solid #22252C;
+}
+
+QToolButton#timelineGroupHeading {
+    background: transparent;
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    border-bottom: 1px solid #22252C;
+    padding: 2px 0 8px 0;
+    text-align: left;
+}
+
+QToolButton#timelineGroupHeading:hover {
+    color: @ACCENT@;
+}
+
+QToolButton#timelineGroupHeading::menu-indicator {
+    image: none;
+    width: 0;
+}
+
+QFrame#timelineMarker {
+    background: #181A20;
+    border: 1px solid #22252C;
+    border-radius: 8px;
+}
+
+QFrame#timelineMarker:hover {
+    border: 1px solid @ACCENT@;
+}
+
+QFrame#timelineMarker[watched="false"] {
+    background: #15161A;
+}
+
+QLabel#timelineOrderBadge {
+    color: #686D78;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#timelineWatchedIndicator {
+    color: #F2C94C;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+QLabel#timelineUnwatchedIndicator {
+    color: #3A3E47;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+/* --- Achievements ---------------------------------------------------------- */
+
+QFrame#achievementCard {
+    background: #181A20;
+    border: 1px solid #292C33;
+    border-radius: 12px;
+}
+
+QFrame#achievementCard[unlocked="false"] {
+    background: #15161A;
+    border: 1px solid #22252C;
+}
+
+QLabel#achievementIcon {
+    font-size: 28px;
+}
+
+QLabel#achievementName {
+    color: #FFFFFF;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+QFrame#achievementCard[unlocked="false"] QLabel#achievementName {
+    color: #A8ABB3;
+}
+
+QLabel#achievementTierBronze {
+    color: #FFFFFF;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #8B5A2B, stop: 0.5 #CD7F32, stop: 1 #D4915B
+    );
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#achievementTierSilver {
+    color: #FFFFFF;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #71767F, stop: 0.5 #C0C0C0, stop: 1 #E8E8E8
+    );
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#achievementTierGold {
+    color: #FFFFFF;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #B8860B, stop: 0.5 #F2C94C, stop: 1 #FFE9A8
+    );
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#achievementTierPlatinum {
+    color: #FFFFFF;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #7FA6AE, stop: 0.5 #B9F2FF, stop: 1 #E8FDFF
+    );
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#achievementTierDiamond {
+    color: #FFFFFF;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #2E86AB, stop: 0.5 #5FD3FF, stop: 1 #C8F4FF
+    );
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#achievementTierVibranium {
+    color: #FFFFFF;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #1B0B3B, stop: 0.5 #6C3CE9, stop: 1 #3CE9C8
+    );
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#achievementTierMarvelous {
+    color: #FFFFFF;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #E62429, stop: 0.5 #F2C94C, stop: 1 #9B4DFF
+    );
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* --- Achievements: "Sort by Tier" section headers --------------------- */
+/* Each title reuses its tier's exact badge color (see achievementTier*
+   above) so a section reads as an obvious continuation of that tier's
+   own cards, not just an arbitrary divider. */
+
+QFrame#achievementSectionHeader {
+    border-bottom: 1px solid #292C33;
+    padding-bottom: 8px;
+}
+
+QLabel#achievementSectionTitleBronze {
+    color: #CD7F32;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#achievementSectionTitleSilver {
+    color: #C0C0C0;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#achievementSectionTitleGold {
+    color: #F2C94C;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#achievementSectionTitlePlatinum {
+    color: #B9F2FF;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#achievementSectionTitleDiamond {
+    color: #5FD3FF;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#achievementSectionTitleVibranium {
+    color: #6C3CE9;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#achievementSectionTitleMarvelous {
+    color: #FFFFFF;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#achievementSectionCount {
+    color: #858A95;
+    font-size: 12px;
+}
+
+QLabel#achievementDescription {
+    color: #858A95;
+    font-size: 12px;
+}
+
+QProgressBar#achievementProgress {
+    background: #22252C;
+    border: none;
+    border-radius: 4px;
+}
+
+QProgressBar#achievementProgress::chunk {
+    background: @ACCENT@;
+    border-radius: 4px;
+}
+
+QFrame#achievementCard[unlocked="true"] QProgressBar#achievementProgress::chunk {
+    background: #4CAF50;
+}
+
+QLabel#achievementFooter {
+    color: #686D78;
+    font-size: 12px;
+}
+
+QLabel#achievementFooterUnlocked {
+    color: #4CAF50;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* --- Settings: Backups list -------------------------------------------- */
+
+QListWidget#backupsList {
+    background: #15161A;
+    border: 1px solid #292C33;
+    border-radius: 8px;
+    color: #D7D9DE;
+    font-size: 13px;
+    outline: none;
+}
+
+QListWidget#backupsList::item {
+    padding: 8px 10px;
+    border-radius: 6px;
+}
+
+QListWidget#backupsList::item:hover {
+    background: #22252C;
+}
+
+QListWidget#backupsList::item:selected {
+    background: @ACCENT@;
+    color: #FFFFFF;
+}
+
+/* --- Settings: Appearance ------------------------------------------------ */
+
+QPushButton#colorSwatchButton {
+    border: 1px solid #30343D;
+    border-radius: 6px;
+    padding: 0px;
+    margin: 0px;
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 32px;
+    max-height: 32px;
+}
+
+/* --- Settings: preference panels (Library, Timeline, Notifications, --- */
+/* --- Personalization, Privacy) ----------------------------------------- */
+
+QCheckBox#preferenceCheckbox {
+    color: #D7D9DE;
+    font-size: 13px;
+    spacing: 8px;
+    padding: 4px 0px;
+}
+
+QCheckBox#preferenceCheckbox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #454B57;
+    border-radius: 4px;
+    background: #181A20;
+}
+
+QCheckBox#preferenceCheckbox::indicator:checked {
+    background: @ACCENT@;
+    border: 1px solid @ACCENT@;
+}
+
+QSpinBox#preferenceSpin {
+    background: #181A20;
+    color: #D7D9DE;
+    border: 1px solid #30343D;
+    border-radius: 8px;
+    padding: 6px 20px 6px 8px;
+    font-size: 13px;
+}
+
+QSpinBox#preferenceSpin:hover {
+    border: 1px solid #454B57;
+}
+
+/* Qt's native style computes the up/down button hit-boxes from the
+   spin box's padding -- with custom padding set above but no explicit
+   subcontrol geometry, that calculation goes wrong on at least one
+   platform's style engine and leaves the up-button's actual clickable
+   area not lined up with where it's drawn (down-button happens to
+   still line up by coincidence). Defining both buttons' geometry
+   explicitly, the same fix already applied to the combo box arrow
+   earlier, makes both buttons' visible position and clickable area
+   the same rect on every platform. */
+QSpinBox#preferenceSpin::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 18px;
+    height: 15px;
+    border-left: 1px solid #30343D;
+    border-top-right-radius: 7px;
+    background: #22252C;
+}
+
+QSpinBox#preferenceSpin::up-button:hover {
+    background: #2A2E37;
+}
+
+QSpinBox#preferenceSpin::up-button:pressed {
+    background: #33373F;
+}
+
+QSpinBox#preferenceSpin::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 18px;
+    height: 15px;
+    border-left: 1px solid #30343D;
+    border-bottom-right-radius: 7px;
+    background: #22252C;
+}
+
+QSpinBox#preferenceSpin::down-button:hover {
+    background: #2A2E37;
+}
+
+QSpinBox#preferenceSpin::down-button:pressed {
+    background: #33373F;
+}
+
+QSpinBox#preferenceSpin::up-arrow {
+    image: none;
+    width: 0px;
+    height: 0px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 5px solid #D7D9DE;
+}
+
+QSpinBox#preferenceSpin::up-arrow:disabled,
+QSpinBox#preferenceSpin::up-arrow:off {
+    border-bottom: 5px solid #4A4E58;
+}
+
+QSpinBox#preferenceSpin::down-arrow {
+    image: none;
+    width: 0px;
+    height: 0px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #D7D9DE;
+}
+
+QSpinBox#preferenceSpin::down-arrow:disabled,
+QSpinBox#preferenceSpin::down-arrow:off {
+    border-top: 5px solid #4A4E58;
+}
+

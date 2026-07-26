@@ -1,0 +1,8 @@
+# Runtime dependencies -- see requirements-dev.txt for test-only extras
+# (pytest, pytest-qt), which aren't needed to just run the app.
+PySide6>=6.8
+SQLAlchemy>=2.0
+alembic>=1.14
+requests>=2.32
+beautifulsoup4>=4.12
+Pillow>=11.0

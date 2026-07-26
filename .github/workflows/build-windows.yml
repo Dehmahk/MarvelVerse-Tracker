@@ -1,0 +1,56 @@
+name: Build Windows Executable
+
+# Builds MarvelVerseTracker.exe on GitHub's own Windows runners -- no local
+# Windows machine needed. Triggered by pushing a version tag (e.g. `git tag
+# v1.1.0 && git push origin v1.1.0`), which also creates/updates a GitHub
+# Release with the .exe attached as a downloadable asset. Can also be run
+# manually from the Actions tab (workflow_dispatch) to test a build without
+# publishing a release.
+#
+# This is also what the in-app "Check for Updates" feature relies on: it
+# looks at this repo's *latest* GitHub Release for a newer version tag and
+# an attached MarvelVerseTracker.exe -- see services/update_service.py.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write  # needed to attach the built .exe to a Release
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build MarvelVerseTracker.exe
+        run: pyinstaller packaging/MarvelVerseTracker.spec --noconfirm
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarvelVerseTracker-windows
+          path: dist/MarvelVerseTracker.exe
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/MarvelVerseTracker.exe
+          generate_release_notes: true
