@@ -7,6 +7,13 @@ name: Build Windows Executable
 # manually from the Actions tab (workflow_dispatch) to test a build without
 # publishing a release.
 #
+# The Release's description is pulled straight from CHANGELOG.md (see
+# packaging/extract_release_notes.py) rather than GitHub's own
+# auto-generated commit-list summary -- whatever you write in the
+# CHANGELOG under "## <version>" is exactly what shows up both here and
+# in the in-app "Update Available" popup, since that popup's text comes
+# straight from this same Release description.
+#
 # This is also what the in-app "Check for Updates" feature relies on: it
 # looks at this repo's *latest* GitHub Release for a newer version tag and
 # an attached MarvelVerseTracker.exe -- see services/update_service.py.
@@ -48,9 +55,15 @@ jobs:
           name: MarvelVerseTracker-windows
           path: dist/MarvelVerseTracker.exe
 
+      - name: Extract release notes from CHANGELOG.md
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_NOTES_OUTPUT_PATH: release_notes.md
+        run: python packaging/extract_release_notes.py "${{ github.ref_name }}"
+
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/MarvelVerseTracker.exe
-          generate_release_notes: true
+          body_path: release_notes.md

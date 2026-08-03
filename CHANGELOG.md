@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.1 — Real release notes in the update popup
+
+The "Update Available" popup (and the matching label on the Settings
+page) always had a slot for release notes, but the build workflow was
+using GitHub's own auto-generated commit-list summary to fill it in --
+for a repo with no pull requests, that produced a pretty bare list of
+commit messages rather than anything meant for a person to read.
+
+The workflow now extracts the matching version's own section straight
+out of `CHANGELOG.md` (see the new `packaging/extract_release_notes.py`)
+and uses that as the GitHub Release's description instead. Whatever
+gets written in the CHANGELOG under a version's own heading is now
+exactly what shows up in the update popup for that version, automatically,
+with no manual editing on GitHub needed after the fact. Written directly
+to the release notes file with explicit UTF-8 encoding rather than shell
+redirection, since GitHub's Windows runners default to PowerShell for
+build steps, whose `>` redirect has its own historical encoding quirks
+that could otherwise mangle the CHANGELOG's em dashes and curly quotes.
+
 ## 1.3.0 — Dashboard Movie/TV split, packaging fixes, and a real catalog bug
 
 Covers everything since 1.1.0 — the versions in between (1.1.1 through
