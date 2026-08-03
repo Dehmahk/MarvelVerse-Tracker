@@ -11,6 +11,7 @@ from sqlalchemy.orm import joinedload
 from database import session_scope
 from models import (
     Achievement,
+    Episode,
     Genre,
     Project,
     ProjectStatus,
@@ -119,6 +120,43 @@ class RecentWatchItem:
     watched_at: datetime
     is_rewatch: bool
     rating: float | None
+
+
+# TV-shaped project types, same grouping used throughout the app for
+# "does this show episodes/season info" (see e.g. the Episodes panel's
+# own visibility check in controllers.application_controller).
+_TV_SHAPED_TYPES = (ProjectType.TV_SERIES, ProjectType.ANIMATED_SERIES, ProjectType.TV_SPECIAL)
+
+
+@dataclass(frozen=True)
+class RecentMovieWatch:
+    """The single most recent movie marked watched or rewatched, for the
+    Dashboard's separate Movie/TV Recently Watched section (distinct
+    from the combined RecentWatchItem list above)."""
+
+    project_id: int
+    title: str
+    poster_path: str | None
+    watched_at: datetime
+    is_rewatch: bool
+
+
+@dataclass(frozen=True)
+class RecentTVWatch:
+    """The single most recently active TV show, decorated with its most
+    recently watched episode if one exists. `episode_title`/
+    `season_number`/`episode_number` are all None when the show was only
+    ever marked watched as a whole, never through per-episode tracking --
+    see get_dashboard_stats()'s docstring for exactly how "most recent"
+    is decided between a whole-show watch and an episode watch."""
+
+    project_id: int
+    title: str
+    poster_path: str | None
+    watched_at: datetime
+    episode_title: str | None
+    season_number: int | None
+    episode_number: int | None
 
 
 @dataclass(frozen=True)
@@ -234,6 +272,8 @@ class DashboardStats:
     achievements_unlocked: int
     achievements_total: int
     recently_watched: tuple[RecentWatchItem, ...]
+    most_recent_movie_watched: RecentMovieWatch | None
+    most_recent_tv_watched: RecentTVWatch | None
     top_rated: tuple[RecentWatchItem, ...]
     universe_breakdown: tuple[UniverseProgress, ...]
     phase_breakdown: tuple[PhaseProgress, ...]
@@ -252,6 +292,93 @@ class DashboardStats:
     @property
     def total_hours_watched(self) -> float:
         return round(self.total_minutes_watched / 60, 1)
+
+
+def _compute_recent_movie_watch(session) -> RecentMovieWatch | None:
+    """The single most recent movie watch/rewatch, or None if nothing's
+    been watched yet."""
+    entry = session.scalars(
+        select(WatchHistoryEntry)
+        .join(Project, WatchHistoryEntry.project_id == Project.id)
+        .where(Project.project_type == ProjectType.MOVIE)
+        .options(joinedload(WatchHistoryEntry.project))
+        .order_by(WatchHistoryEntry.watched_at.desc(), WatchHistoryEntry.id.desc())
+        .limit(1)
+    ).first()
+    if entry is None:
+        return None
+    return RecentMovieWatch(
+        project_id=entry.project_id,
+        title=entry.project.title,
+        poster_path=entry.project.poster_path,
+        watched_at=entry.watched_at,
+        is_rewatch=entry.is_rewatch,
+    )
+
+
+def _compute_recent_tv_watch(session) -> RecentTVWatch | None:
+    """The single most recently *active* TV show -- comparing a
+    whole-show watch (WatchHistoryEntry) against a per-episode watch
+    (Episode.watched_at) and taking whichever is more recent -- then
+    decorated with that show's own most recently watched episode, if
+    any episode has ever been marked watched for it at all (regardless
+    of whether that specific episode watch is what made this show "most
+    recent" overall). Falls back to just the show's title with no
+    episode info if it's only ever been marked watched as a whole.
+    Returns None if no TV show has been watched at all."""
+    whole_show_row = session.execute(
+        select(WatchHistoryEntry.project_id, WatchHistoryEntry.watched_at)
+        .join(Project, WatchHistoryEntry.project_id == Project.id)
+        .where(Project.project_type.in_(_TV_SHAPED_TYPES))
+        .order_by(WatchHistoryEntry.watched_at.desc(), WatchHistoryEntry.id.desc())
+        .limit(1)
+    ).first()
+
+    episode_row = session.execute(
+        select(Episode.project_id, Episode.watched_at)
+        .join(Project, Episode.project_id == Project.id)
+        .where(Episode.watched.is_(True), Project.project_type.in_(_TV_SHAPED_TYPES))
+        .order_by(Episode.watched_at.desc(), Episode.id.desc())
+        .limit(1)
+    ).first()
+
+    candidates = [row for row in (whole_show_row, episode_row) if row is not None and row[1] is not None]
+    if not candidates:
+        return None
+
+    winning_project_id, winning_timestamp = max(candidates, key=lambda row: row[1])
+
+    project = session.get(Project, winning_project_id)
+    if project is None:
+        return None
+
+    most_recent_episode = session.scalars(
+        select(Episode)
+        .where(Episode.project_id == winning_project_id, Episode.watched.is_(True))
+        .order_by(Episode.watched_at.desc(), Episode.id.desc())
+        .limit(1)
+    ).first()
+
+    if most_recent_episode is not None:
+        return RecentTVWatch(
+            project_id=project.id,
+            title=project.title,
+            poster_path=project.poster_path,
+            watched_at=most_recent_episode.watched_at,
+            episode_title=most_recent_episode.title or f"Episode {most_recent_episode.episode_number}",
+            season_number=most_recent_episode.season_number,
+            episode_number=most_recent_episode.episode_number,
+        )
+
+    return RecentTVWatch(
+        project_id=project.id,
+        title=project.title,
+        poster_path=project.poster_path,
+        watched_at=winning_timestamp,
+        episode_title=None,
+        season_number=None,
+        episode_number=None,
+    )
 
 
 def get_dashboard_stats(recent_limit: int = DEFAULT_RECENT_LIMIT) -> DashboardStats:
@@ -571,6 +698,8 @@ def get_dashboard_stats(recent_limit: int = DEFAULT_RECENT_LIMIT) -> DashboardSt
         achievements_unlocked=achievements_unlocked,
         achievements_total=achievements_total,
         recently_watched=recently_watched,
+        most_recent_movie_watched=_compute_recent_movie_watch(session),
+        most_recent_tv_watched=_compute_recent_tv_watch(session),
         top_rated=top_rated,
         universe_breakdown=universe_breakdown,
         phase_breakdown=phase_breakdown,

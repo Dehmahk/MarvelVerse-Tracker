@@ -181,6 +181,51 @@ class RecentWatchRow(QFrame):
         super().mousePressEvent(event)
 
 
+class _SingleRecentRow(QFrame):
+    """A single-item row for the Movie/TV split "Recently Watched"
+    section -- simpler than RecentWatchRow (no rating column, no
+    project-type label, since each panel is already scoped to one
+    type), and takes plain values rather than a whole duck-typed item,
+    since the caller (RecentMovieWatch vs. RecentTVWatch) already
+    computed whatever subtitle text is appropriate for each case."""
+
+    clicked = Signal(int)
+
+    def __init__(self, title: str, poster_path: str | None, subtitle: str, project_id: int, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("projectRowCompact")
+        self._project_id = project_id
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        layout = QHBoxLayout(self)
+        layout.setSpacing(14)
+        layout.setContentsMargins(14, 8, 14, 8)
+
+        thumb = PosterLabel(corner_radius=6)
+        thumb.setFixedSize(40, 40)
+        thumb.set_poster(poster_path, title)
+        layout.addWidget(thumb)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(2)
+
+        title_label = QLabel(title)
+        title_label.setObjectName("rowTitle")
+        text_col.addWidget(title_label)
+
+        subtitle_label = QLabel(subtitle)
+        subtitle_label.setObjectName("rowSubtitle")
+        subtitle_label.setWordWrap(True)
+        text_col.addWidget(subtitle_label)
+
+        layout.addLayout(text_col, 1)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit(self._project_id)
+        super().mousePressEvent(event)
+
+
 class DashboardView(QWidget):
     """The Dashboard page. Presentation-only, like every other page: it
     starts in a zero/empty state and is brought to life by the controller
@@ -403,6 +448,46 @@ class DashboardView(QWidget):
 
         layout.addLayout(lists_row)
 
+        # --- recently watched, split by Movie / TV Show ---------------------
+        # A separate section from the combined "Recently Watched" list
+        # above -- that one's a mixed list of several recent watches;
+        # this one shows just the single most recent movie and the
+        # single most recent TV show side by side, with the TV side
+        # naming the specific episode when episode-level tracking data
+        # is available for it.
+        split_recent_row = QHBoxLayout()
+        split_recent_row.setSpacing(16)
+
+        recent_movie_panel = QFrame()
+        recent_movie_panel.setObjectName("contentPanel")
+        recent_movie_layout = QVBoxLayout(recent_movie_panel)
+        recent_movie_title = QLabel("Recently Watched \u2014 Movie")
+        recent_movie_title.setObjectName("sectionHeading")
+        recent_movie_layout.addWidget(recent_movie_title)
+        self._recent_movie_slot = QVBoxLayout()
+        recent_movie_layout.addLayout(self._recent_movie_slot)
+        self.recent_movie_empty_label = QLabel("Watch a movie to see it here.")
+        self.recent_movie_empty_label.setObjectName("emptyState")
+        recent_movie_layout.addWidget(self.recent_movie_empty_label)
+        recent_movie_layout.addStretch()
+        split_recent_row.addWidget(recent_movie_panel, 1)
+
+        recent_tv_panel = QFrame()
+        recent_tv_panel.setObjectName("contentPanel")
+        recent_tv_layout = QVBoxLayout(recent_tv_panel)
+        recent_tv_title = QLabel("Recently Watched \u2014 TV Show")
+        recent_tv_title.setObjectName("sectionHeading")
+        recent_tv_layout.addWidget(recent_tv_title)
+        self._recent_tv_slot = QVBoxLayout()
+        recent_tv_layout.addLayout(self._recent_tv_slot)
+        self.recent_tv_empty_label = QLabel("Watch a TV show to see it here.")
+        self.recent_tv_empty_label.setObjectName("emptyState")
+        recent_tv_layout.addWidget(self.recent_tv_empty_label)
+        recent_tv_layout.addStretch()
+        split_recent_row.addWidget(recent_tv_panel, 1)
+
+        layout.addLayout(split_recent_row)
+
         # --- collections spotlight -----------------------------------------
         self._collection_spotlight_slot = QVBoxLayout()
         layout.addLayout(self._collection_spotlight_slot)
@@ -561,6 +646,8 @@ class DashboardView(QWidget):
 
         self._set_up_next(stats.up_next)
         self._set_recently_watched(stats.recently_watched)
+        self._set_recent_movie_watch(stats.most_recent_movie_watched)
+        self._set_recent_tv_watch(stats.most_recent_tv_watched)
         self._set_top_rated(stats.top_rated)
         self._universe_breakdown = stats.universe_breakdown
         self._phase_breakdown = stats.phase_breakdown
@@ -629,6 +716,43 @@ class DashboardView(QWidget):
             row = RecentWatchRow(item)
             row.clicked.connect(self.project_activated.emit)
             self._recent_rows_layout.addWidget(row)
+
+    def _set_recent_movie_watch(self, item) -> None:
+        """`item` is a duck-typed services.statistics_service.RecentMovieWatch,
+        or None if no movie has been watched yet."""
+        self._clear_layout(self._recent_movie_slot)
+        if item is None:
+            self.recent_movie_empty_label.setVisible(True)
+            return
+        self.recent_movie_empty_label.setVisible(False)
+        subtitle_bits = []
+        if item.is_rewatch:
+            subtitle_bits.append("Rewatch")
+        subtitle_bits.append(format_short_date(item.watched_at))
+        row = _SingleRecentRow(item.title, item.poster_path, "  \u00b7  ".join(subtitle_bits), item.project_id)
+        row.clicked.connect(self.project_activated.emit)
+        self._recent_movie_slot.addWidget(row)
+
+    def _set_recent_tv_watch(self, item) -> None:
+        """`item` is a duck-typed services.statistics_service.RecentTVWatch,
+        or None if no TV show has been watched yet. Shows the specific
+        episode (season/number/title) when that data is available,
+        falling back to just the date watched otherwise."""
+        self._clear_layout(self._recent_tv_slot)
+        if item is None:
+            self.recent_tv_empty_label.setVisible(True)
+            return
+        self.recent_tv_empty_label.setVisible(False)
+        if item.season_number is not None and item.episode_number is not None:
+            subtitle = (
+                f"S{item.season_number}E{item.episode_number}: {item.episode_title}"
+                f"  \u00b7  {format_short_date(item.watched_at)}"
+            )
+        else:
+            subtitle = format_short_date(item.watched_at)
+        row = _SingleRecentRow(item.title, item.poster_path, subtitle, item.project_id)
+        row.clicked.connect(self.project_activated.emit)
+        self._recent_tv_slot.addWidget(row)
 
     def _set_top_rated(self, items) -> None:
         self._clear_layout(self._top_rated_rows_layout)

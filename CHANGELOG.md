@@ -1,5 +1,89 @@
 # Changelog
 
+## 1.3.0 — Dashboard Movie/TV split, packaging fixes, and a real catalog bug
+
+Covers everything since 1.1.0 — the versions in between (1.1.1 through
+1.2.9) were shipped without individual changelog entries, so this rolls
+all of that up alongside the new feature.
+
+### New: Recently Watched, split by Movie / TV Show
+
+A new Dashboard section, separate from the existing combined Recently
+Watched list — one panel for the single most recent movie you've
+watched or rewatched, and one for the single most recent TV show,
+naming the specific episode (season, number, and title) when you've
+been tracking episodes for that show. Falls back to just the show's
+title if it's only ever been marked watched as a whole. When a show has
+both a whole-series watch and per-episode activity, whichever is
+actually more recent wins.
+
+### A real, significant catalog bug, found and fixed
+
+The packaged `.exe` never had any way to get the actual movie/show
+catalog into a fresh installation — migrations only created empty
+tables, and the app's seeding only ever covered reference data
+(universes, franchises, genres, achievements), never the catalog
+itself. Fixed two ways: the build now bundles the real catalog
+database, and a fresh install copies it into place on first run.
+Separately, existing installs now automatically pick up any newly-added
+catalog projects on every launch (matched by a stable slug) without
+ever touching existing projects or any personal data — so an update no
+longer means starting your tracking over.
+
+### TMDB sync fixes
+
+- Sync now checks for an existing project with the same title and a
+  release date in the same year before creating a new one — TMDB
+  itself sometimes carries more than one listing for the same real
+  show (e.g. an orphaned "cancelled" placeholder alongside the real,
+  released entry), which previously created duplicate catalog rows.
+  Deliberately conservative: only exact title matches in the *same
+  year* are treated as duplicates, so genuinely different films
+  sharing a name across decades are never affected.
+- A new "Clean Up Duplicate Projects" tool in Settings for duplicates
+  that already exist from before this fix — only ever auto-removes a
+  duplicate with zero personal data attached (no rating, notes,
+  watched status, watch history, watched episodes, or collection
+  membership); anything with real data on it is left completely
+  untouched and listed for manual review instead.
+- The "Sync Episode Details from TMDB" button now disables itself with
+  a clear tooltip when a show isn't linked to TMDB yet (or has no
+  season count set), rather than failing silently after a click with a
+  status message that's easy to miss.
+
+### Packaging & build fixes
+
+- Fixed a missing `VSVersionInfo` import that broke the Windows build
+  entirely — PyInstaller's version-info helpers aren't auto-injected
+  into a `.spec` file's namespace the way `Analysis`/`PYZ`/`EXE` are.
+- The `.exe` now embeds real version metadata (file description,
+  version, product name, copyright), computed from `version.py` so it
+  can never drift out of sync with an actual release.
+- Set Windows' AppUserModelID at startup and have `MainWindow` set its
+  own icon directly rather than only inheriting the application-wide
+  default — together these fix a real, reported split where the title
+  bar showed the correct icon but the taskbar (while running) didn't.
+- The build now only bundles the specific asset files it actually
+  needs, not the whole `packaging/assets` folder — documentation
+  screenshots no longer bloat the `.exe` for no reason.
+- Replaced the old auto-relaunch update mechanism (which required a
+  fragile self-replace dance on Windows and was the source of a "Failed
+  to load Python DLL" crash) with a simpler, more reliable one: the app
+  downloads the new version to your Downloads folder with a clear,
+  versioned filename and opens that folder for you, rather than trying
+  to replace and restart itself automatically.
+- Added a real integrity check on downloaded updates (verifying the
+  downloaded file's size against what GitHub reports for the release
+  asset) so a truncated/corrupted download is caught immediately
+  instead of surfacing later as a mysterious crash after the original
+  `.exe` is already gone.
+
+### Documentation
+
+- Added real in-app screenshots to the README (Library, Timeline,
+  Dashboard, Project Details, Achievements, Collections, Actor/Director
+  Pages).
+
 ## 1.1.0 — Content expansion, quality-of-life batch, and hidden achievements
 
 A large batch of work spanning content expansion, new features, bug

@@ -683,6 +683,24 @@ class ProjectDetailView(QWidget):
             self._is_current_project_tv_shaped = is_tv_shaped
             self.episodes_panel.setVisible(is_tv_shaped)
 
+            if is_tv_shaped:
+                has_tmdb_id = detail.tmdb_id is not None
+                has_season_count = getattr(detail, "season_count", None) is not None
+                self.sync_episode_details_button.setEnabled(has_tmdb_id and has_season_count)
+                if not has_tmdb_id:
+                    self.sync_episode_details_button.setToolTip(
+                        "This show isn't linked to a TMDB entry yet -- use \"Find on TMDB\" above first, "
+                        "then this button will fetch real episode details."
+                    )
+                elif not has_season_count:
+                    self.sync_episode_details_button.setToolTip(
+                        "This show doesn't have a season count set yet, so there's nothing to sync episodes for."
+                    )
+                else:
+                    self.sync_episode_details_button.setToolTip(
+                        "Fetches real episode titles, air dates, runtimes, and synopses from TMDB."
+                    )
+
             self.synopsis_label.setText(detail.synopsis or "No synopsis available yet.")
 
             self.watched_toggle.setChecked(detail.watched)
